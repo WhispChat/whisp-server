@@ -4,7 +4,7 @@
 #include <string>
 #include <strings.h>
 #include <unistd.h>
-#include <vector>
+#include <unordered_set>
 
 #include "whisp-server/connection.h"
 #include <arpa/inet.h>
@@ -30,5 +30,6 @@ class TCPSocketServer {
 
     int serv_fd;
     struct sockaddr_in serv_addr;
-    std::vector<Connection> connections;
+
+    std::unordered_set<Connection, ConnectionHash> connections;
 };

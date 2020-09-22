@@ -57,7 +57,7 @@ void TCPSocketServer::serve() {
 
       std::string username = "user" + std::to_string(connections.size());
       Connection conn(username, client_addr, client_len, client_fd);
-      connections.push_back(conn);
+      connections.insert(conn);
 
       std::thread t(&TCPSocketServer::handle_connection, this, conn);
       t.detach();
@@ -81,8 +81,7 @@ void TCPSocketServer::handle_connection(Connection conn) {
     memcpy(buffer, username_str, strlen(username_str));
   }
 
-  // TODO: handle removing connection from connections vector
-
+  connections.erase(conn);
   close(conn.fd);
 }
 
