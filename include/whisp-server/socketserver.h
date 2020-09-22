@@ -1,11 +1,12 @@
 #pragma once
 
-#include <iostream>
 #include <string.h>
 #include <string>
 #include <strings.h>
 #include <unistd.h>
+#include <vector>
 
+#include "whisp-server/connection.h"
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <sys/socket.h>
@@ -21,12 +22,13 @@ class TCPSocketServer {
     ~TCPSocketServer();
 
   private:
-    virtual void handle_connection(int client_sock_fd);
+    virtual void handle_connection(Connection conn);
 
     const std::string &host;
     int port;
     std::size_t max_conn;
 
-    int sock_fd;
+    int serv_fd;
     struct sockaddr_in serv_addr;
+    std::vector<Connection> connections;
 };
