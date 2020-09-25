@@ -1,16 +1,8 @@
 #pragma once
 
-#include <string.h>
-#include <string>
-#include <strings.h>
-#include <unistd.h>
-#include <unordered_set>
-
 #include "whisp-server/connection.h"
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <sys/socket.h>
-#include <thread>
+#include <string>
+#include <unordered_set>
 
 class TCPSocketServer {
   public:
@@ -23,6 +15,7 @@ class TCPSocketServer {
 
   private:
     virtual void handle_connection(Connection conn);
+    void close_connection(Connection conn);
 
     const std::string &host;
     int port;

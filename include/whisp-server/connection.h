@@ -1,6 +1,7 @@
 #pragma once
 
 #include <arpa/inet.h>
+#include <string>
 
 class Connection {
   public:
@@ -8,8 +9,9 @@ class Connection {
                socklen_t addr_len, int fd)
         : username(username), addr(addr), addr_len(addr_len), fd(fd) {}
 
-    bool operator==(const Connection &c) const { return this->fd == c.fd; }
+    void set_username(std::string username);
 
+    bool operator==(const Connection &c) const { return this->fd == c.fd; }
     friend std::ostream &operator<<(std::ostream &os, const Connection &c) {
         os << c.username;
         return os;
@@ -25,5 +27,3 @@ class ConnectionHash {
   public:
     size_t operator()(const Connection &c) const { return c.fd; }
 };
-
-std::ostream &operator<<(std::ostream &os, const Connection &c);

@@ -1,4 +1,4 @@
-file(GLOB HEADER_LIST CONFIGURE_DEPENDS "${WhispServer_SOURCE_DIR}/include/whisp-server/*.hpp")
+file(GLOB HEADER_LIST CONFIGURE_DEPENDS "${WhispServer_SOURCE_DIR}/include/whisp-server/*.h")
 file(GLOB SRC_LIST "*.cc")
 
 add_library(whisp_lib ${SRC_LIST} ${HEADER_LIST})

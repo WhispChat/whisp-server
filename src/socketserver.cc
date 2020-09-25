@@ -1,6 +1,18 @@
 #include "whisp-server/socketserver.h"
+#include "whisp-server/connection.h"
+#include "whisp-server/message.h"
 
+#include <algorithm>
 #include <iostream>
+#include <string.h>
+#include <string>
+#include <strings.h>
+#include <unistd.h>
+
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <sys/socket.h>
+#include <thread>
 
 void TCPSocketServer::initialize() {
   serv_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -69,24 +81,53 @@ void TCPSocketServer::serve() {
 void TCPSocketServer::handle_connection(Connection conn) {
   // TODO: more C++ way of reading to buffer using iostream?
   char buffer[4096];
-  std::string username = "[" + conn.username + "]: ";
-  size_t username_size = username.size();
 
-  memcpy(buffer, username.data(), username_size);
+  while (recv(conn.fd, buffer, sizeof buffer, 0) > 0) {
+    Message msg(conn, buffer);
 
-  while (recv(conn.fd, buffer + username_size, sizeof buffer, 0) > 0) {
-    for (auto client : connections) {
-      send(client.fd, (void *)buffer, strlen(buffer), MSG_NOSIGNAL);
+    if (msg.is_command) {
+      Command cmd = msg.get_command();
+
+      if (cmd == CloseConnection) {
+        break;
+      } else if (cmd == Set) {
+        std::vector<std::string> args = msg.get_command_args();
+        std::string set_variable = args.at(0);
+        std::string set_value = args.at(1);
+
+        std::transform(set_variable.begin(), set_variable.end(),
+                       set_variable.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+
+        if (set_variable.compare("username") == 0) {
+          // TODO: make setter work
+          // conn.set_username(set_value);
+          conn.username = set_value;
+        } else {
+          // TODO: send unknown set variable message
+        }
+      } else if (cmd == Unknown) {
+        // TODO: send unknown command message
+      }
+    } else {
+      std::string message_str = msg.get_fmt_str();
+
+      for (auto client : connections) {
+        send(client.fd, (void *)message_str.data(), message_str.size(),
+             MSG_NOSIGNAL);
+      }
+
+      std::cout << message_str << std::endl;
+      bzero(buffer, sizeof buffer);
     }
-
-    std::cout << buffer << std::endl;
-
-    bzero(buffer, sizeof buffer);
-    memcpy(buffer, username.data(), username_size);
   }
 
   std::cout << "[INFO] connection " << conn << " disconnected" << std::endl;
 
+  close_connection(conn);
+}
+
+void TCPSocketServer::close_connection(Connection conn) {
   connections.erase(conn);
   close(conn.fd);
 }
