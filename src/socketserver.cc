@@ -58,6 +58,8 @@ void TCPSocketServer::serve() {
       Connection conn(username, client_addr, client_len, client_fd);
       connections.insert(conn);
 
+      std::cout << "[INFO] new connection " << conn << std::endl;
+
       std::thread t(&TCPSocketServer::handle_connection, this, conn);
       t.detach();
     }
@@ -65,20 +67,25 @@ void TCPSocketServer::serve() {
 }
 
 void TCPSocketServer::handle_connection(Connection conn) {
+  // TODO: more C++ way of reading to buffer using iostream?
   char buffer[4096];
   std::string username = "[" + conn.username + "]: ";
+  size_t username_size = username.size();
 
-  const char *username_str = username.c_str();
-  memcpy(buffer, username_str, strlen(username_str));
+  memcpy(buffer, username.data(), username_size);
 
-  while (recv(conn.fd, buffer + strlen(username_str), sizeof buffer, 0) > 0) {
+  while (recv(conn.fd, buffer + username_size, sizeof buffer, 0) > 0) {
     for (auto client : connections) {
       send(client.fd, (void *)buffer, strlen(buffer), MSG_NOSIGNAL);
     }
 
+    std::cout << buffer << std::endl;
+
     bzero(buffer, sizeof buffer);
-    memcpy(buffer, username_str, strlen(username_str));
+    memcpy(buffer, username.data(), username_size);
   }
+
+  std::cout << "[INFO] connection " << conn << " disconnected" << std::endl;
 
   connections.erase(conn);
   close(conn.fd);

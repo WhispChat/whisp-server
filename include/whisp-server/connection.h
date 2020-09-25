@@ -10,6 +10,11 @@ class Connection {
 
     bool operator==(const Connection &c) const { return this->fd == c.fd; }
 
+    friend std::ostream &operator<<(std::ostream &os, const Connection &c) {
+        os << c.username;
+        return os;
+    }
+
     std::string username;
     int fd;
     struct sockaddr_in addr;
@@ -20,3 +25,5 @@ class ConnectionHash {
   public:
     size_t operator()(const Connection &c) const { return c.fd; }
 };
+
+std::ostream &operator<<(std::ostream &os, const Connection &c);
