@@ -118,8 +118,9 @@ void TCPSocketServer::handle_connection(Connection conn) {
       }
 
       std::cout << message_str << std::endl;
-      bzero(buffer, sizeof buffer);
     }
+
+    bzero(buffer, sizeof buffer);
   }
 
   std::cout << "[INFO] connection " << conn << " disconnected" << std::endl;
