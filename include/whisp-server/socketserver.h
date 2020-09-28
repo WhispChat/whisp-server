@@ -1,6 +1,7 @@
 #pragma once
 
 #include "whisp-server/connection.h"
+#include "whisp-server/message.h"
 #include <string>
 #include <unordered_set>
 
@@ -15,7 +16,9 @@ class TCPSocketServer {
 
   private:
     virtual void handle_connection(Connection conn);
-    void close_connection(Connection conn);
+    void broadcast(std::string msg);
+    bool parse_command(Connection &conn, Command cmd);
+    void close_connection(Connection &conn);
 
     const std::string &host;
     int port;

@@ -4,7 +4,12 @@
 
 #include <vector>
 
-enum Command { Set, CloseConnection, Unknown };
+enum CommandType { Set, CloseConnection, Unknown };
+
+struct Command {
+    CommandType type;
+    std::vector<std::string> args;
+};
 
 class Message {
   public:
@@ -12,14 +17,13 @@ class Message {
 
     std::string get_fmt_str();
     Command get_command();
-    std::vector<std::string> get_command_args();
 
+    std::string message;
     bool is_command = false;
 
   private:
     void split_message_parts();
 
-    std::string message;
     Connection conn;
     std::vector<std::string> message_parts;
 };

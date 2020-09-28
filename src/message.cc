@@ -33,15 +33,15 @@ Command Message::get_command() {
   std::transform(command_str.begin(), command_str.end(), command_str.begin(),
                  [](unsigned char c) { return std::tolower(c); });
 
+  CommandType type = Unknown;
+  std::vector<std::string> args = {message_parts.begin() + 1,
+                                   message_parts.end()};
+
   if (command_str.compare("set") == 0) {
-    return Set;
+    type = Set;
   } else if (command_str.compare("quit") == 0) {
-    return CloseConnection;
+    type = CloseConnection;
   }
 
-  return Unknown;
-}
-
-std::vector<std::string> Message::get_command_args() {
-  return {message_parts.begin() + 1, message_parts.end()};
+  return {type, args};
 }
