@@ -55,8 +55,6 @@ void TCPSocketServer::serve() {
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
 
-    ::listen(serv_fd, max_conn);
-
     if (connections.size() < max_conn) {
       // Accept connection if we're not at max connections
       client_fd = accept(serv_fd, (struct sockaddr *)&client_addr, &client_len);
