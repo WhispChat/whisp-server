@@ -26,23 +26,16 @@ void TCPSocketServer::initialize() {
   serv_addr.sin_port = htons(port);
 
   int reuse_port = 1;
-  int ret_test =
-      setsockopt(serv_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_port, sizeof(int));
-
-  if (ret_test == -1) {
+  if (setsockopt(serv_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_port, sizeof(int)) ==
+      -1) {
     throw "setsockopt failed";
   }
 
-  int bind_ret =
-      bind(serv_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr));
-
-  if (bind_ret == -1) {
+  if (bind(serv_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1) {
     throw "bind failed";
   }
 
-  int listen_ret = listen(serv_fd, max_conn);
-
-  if (listen_ret == -1) {
+  if (listen(serv_fd, max_conn) == -1) {
     throw "listen failed";
   }
 }
