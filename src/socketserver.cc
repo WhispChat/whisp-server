@@ -120,7 +120,7 @@ bool TCPSocketServer::parse_command(Connection &conn, Command cmd) {
 
     if (set_variable.compare("username") == 0) {
       conn.set_username(set_value);
-      update_conn(conn);
+      update_connection(conn);
     } else {
       std::stringstream error_stream;
       error_stream << "unknown variable \"" << set_variable << "\"\n";
@@ -157,7 +157,7 @@ void TCPSocketServer::close_connection(Connection conn) {
   close(conn.fd);
 }
 
-void TCPSocketServer::update_conn(Connection conn) {
+void TCPSocketServer::update_connection(Connection conn) {
   connections.erase(conn);
   connections.insert(conn);
 }

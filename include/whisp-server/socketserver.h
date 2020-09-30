@@ -19,7 +19,7 @@ class TCPSocketServer {
     void broadcast(std::string msg);
     bool parse_command(Connection &conn, Command cmd);
     void close_connection(Connection conn);
-    void update_conn(Connection conn);
+    void update_connection(Connection conn);
 
     const std::string &host;
     int port;
