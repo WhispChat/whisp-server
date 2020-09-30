@@ -141,21 +141,20 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
     return true;
     break;
   case Set: {
+    if (cmd.args.size() != 2) {
+      std::string error_msg =
+          "[ERROR] Incorrect amount of arguments for set - expected 2.\n";
+      send_message(error_msg, *conn);
+      break;
+    }
+
     std::string set_variable = cmd.args.at(0);
+    std::string set_value = cmd.args.at(1);
 
     // make set variable case insensitive
     std::transform(set_variable.begin(), set_variable.end(),
                    set_variable.begin(),
                    [](unsigned char c) { return std::tolower(c); });
-
-    if (cmd.args.size() <= 1) {
-      std::string error_msg =
-          "[ERROR] Not enough arguments for set - need 2.\n";
-      send_message(error_msg, *conn);
-      break;
-    }
-
-    std::string set_value = cmd.args.at(1);
 
     if (set_variable.compare("username") == 0) {
       std::string old_username = conn->username;
