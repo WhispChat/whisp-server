@@ -65,6 +65,10 @@ void TCPSocketServer::serve() {
       std::string user_joined_message = "[INFO] " + username + " has joined the channel.";
       broadcast(user_joined_message);
 
+      // Send a welcome message to the new connection
+      std::string welcome_message = "[INFO] Welcome to the channel, " + username + "!\n";
+      send_message(welcome_message, *new_conn);
+
       // Send a message containing a list of all existing users to the new connection
       std::string user_list_message;
       if (connections.empty()) {
