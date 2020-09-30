@@ -152,8 +152,12 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
       std::string error_msg =
           "[ERROR] Not enough arguments for set - need 2.\n";
       send_message(error_msg, *conn);
-    } else if (set_variable.compare("username") == 0) {
-      std::string set_value = cmd.args.at(1);
+      break;
+    }
+
+    std::string set_value = cmd.args.at(1);
+
+    if (set_variable.compare("username") == 0) {
       std::string old_username = conn->username;
       conn->set_username(set_value);
       std::string username_message = "[INFO] " + old_username +
