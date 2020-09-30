@@ -39,6 +39,8 @@ Command Message::get_command() {
 
   if (command_str.compare("set") == 0) {
     type = Set;
+  } else if (command_str.compare("users") == 0) {
+    type = ListUsers;
   } else if (command_str.compare("quit") == 0) {
     type = CloseConnection;
   }

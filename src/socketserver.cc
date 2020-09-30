@@ -120,12 +120,27 @@ bool TCPSocketServer::parse_command(Connection &conn, Command cmd) {
 
     if (set_variable.compare("username") == 0) {
       conn.set_username(set_value);
+      update_conn(conn);
     } else {
       std::stringstream error_stream;
       error_stream << "unknown variable \"" << set_variable << "\"\n";
       std::string error_msg = error_stream.str();
       send(conn.fd, error_msg.data(), error_msg.size(), MSG_NOSIGNAL);
     }
+    break;
+  }
+  case ListUsers: {
+    std::stringstream connected_users;
+    connected_users << "Connected users: ";
+    for (auto user : connections) {
+      connected_users << user.username << " ";
+    }
+    connected_users << '\n';
+
+    std::string connected_users_str = connected_users.str();
+    send(conn.fd, connected_users_str.data(), connected_users_str.size(),
+         MSG_NOSIGNAL);
+
     break;
   }
   case Unknown: {
@@ -137,9 +152,14 @@ bool TCPSocketServer::parse_command(Connection &conn, Command cmd) {
   return false;
 }
 
-void TCPSocketServer::close_connection(Connection &conn) {
+void TCPSocketServer::close_connection(Connection conn) {
   connections.erase(conn);
   close(conn.fd);
+}
+
+void TCPSocketServer::update_conn(Connection conn) {
+  connections.erase(conn);
+  connections.insert(conn);
 }
 
 TCPSocketServer::~TCPSocketServer() { close(serv_fd); }

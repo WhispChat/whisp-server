@@ -4,7 +4,7 @@
 
 #include <vector>
 
-enum CommandType { Set, CloseConnection, Unknown };
+enum CommandType { Set, ListUsers, CloseConnection, Unknown };
 
 struct Command {
     CommandType type;
