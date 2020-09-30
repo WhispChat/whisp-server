@@ -59,26 +59,27 @@ void TCPSocketServer::serve() {
 
       std::string username = "user" + std::to_string(connections.size());
       Connection *new_conn =
-              new Connection(username, client_addr, client_len, client_fd);
+          new Connection(username, client_addr, client_len, client_fd);
 
-      // Broadcast a message to all existing connections to inform about the new connection
-      std::string user_joined_message = "[INFO] " + username + " has joined the channel.";
+      // Broadcast a message to all existing connections to inform about the new
+      // connection
+      std::string user_joined_message =
+          "[INFO] " + username + " has joined the channel.\n";
       broadcast(user_joined_message);
 
       // Send a welcome message to the new connection
-      std::string welcome_message = "[INFO] Welcome to the channel, " + username + "!\n";
+      std::string welcome_message =
+          "[INFO] Welcome to the channel, " + username + "!\n";
       send_message(welcome_message, *new_conn);
 
-      // Send a message containing a list of all existing users to the new connection
+      // Send a message containing a list of all existing users to the new
+      // connection
       std::string user_list_message;
       if (connections.empty()) {
-        user_list_message = "[INFO] There are no users in this channel.";
+        user_list_message = "[INFO] There are no users in this channel.\n";
       } else {
-        user_list_message = "[INFO] Users in this channel: ";
-        for (auto conn : connections) {
-          user_list_message += conn->username + ", ";
-        }
-        user_list_message = user_list_message.substr(0, user_list_message.size() - 2) + ".";
+        user_list_message =
+            "[INFO] Users in this channel: " + get_users_list() + ".\n";
       }
       send_message(user_list_message, *new_conn);
 
@@ -130,7 +131,7 @@ void TCPSocketServer::send_message(std::string msg, Connection conn) {
 
 void TCPSocketServer::broadcast(std::string msg) {
   for (auto conn : connections) {
-    send(conn->fd, msg.data(), msg.size(), MSG_NOSIGNAL);
+    send_message(msg, *conn);
   }
 }
 
@@ -149,32 +150,30 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
                    [](unsigned char c) { return std::tolower(c); });
 
     if (set_variable.compare("username") == 0) {
+      std::string old_username = conn->username;
       conn->set_username(set_value);
+      std::string username_message = "[INFO] " + old_username +
+                                     " changed their username to " +
+                                     conn->username + ".\n";
+      broadcast(username_message);
     } else {
       std::stringstream error_stream;
-      error_stream << "unknown variable \"" << set_variable << "\"\n";
+      error_stream << "[ERROR] Unknown variable \"" << set_variable << "\"\n";
       std::string error_msg = error_stream.str();
-      send(conn->fd, error_msg.data(), error_msg.size(), MSG_NOSIGNAL);
+      send_message(error_msg, *conn);
     }
     break;
   }
   case ListUsers: {
-    std::stringstream connected_users;
-    connected_users << "Connected users: ";
-    for (auto user : connections) {
-      connected_users << user->username << " ";
-    }
-    connected_users << '\n';
-
-    std::string connected_users_str = connected_users.str();
-    send(conn->fd, connected_users_str.data(), connected_users_str.size(),
-         MSG_NOSIGNAL);
+    std::string user_list_message =
+        "[INFO] Users in this channel: " + get_users_list() + ".\n";
+    send_message(user_list_message, *conn);
 
     break;
   }
   case Unknown: {
-    std::string error_msg = "unknown command\n";
-    send(conn->fd, error_msg.data(), error_msg.size(), MSG_NOSIGNAL);
+    std::string error_msg = "[ERROR] Unknown command\n";
+    send_message(error_msg, *conn);
     break;
   }
   }
@@ -187,4 +186,15 @@ void TCPSocketServer::close_connection(Connection *conn) {
   close(conn->fd);
   connections.erase(conn);
   delete conn;
+}
+
+std::string TCPSocketServer::get_users_list() {
+  std::string user_list_message;
+
+  for (auto conn : connections) {
+    user_list_message += conn->username + ", ";
+  }
+  user_list_message = user_list_message.substr(0, user_list_message.size() - 2);
+
+  return user_list_message;
 }

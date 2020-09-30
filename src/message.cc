@@ -33,16 +33,16 @@ Command Message::get_command() {
   std::transform(command_str.begin(), command_str.end(), command_str.begin(),
                  [](unsigned char c) { return std::tolower(c); });
 
-  CommandType type = Unknown;
+  CommandType type;
   std::vector<std::string> args = {message_parts.begin() + 1,
                                    message_parts.end()};
+  std::unordered_map<std::string, CommandType>::iterator it =
+      commands_map.find(command_str);
 
-  if (command_str.compare("set") == 0) {
-    type = Set;
-  } else if (command_str.compare("users") == 0) {
-    type = ListUsers;
-  } else if (command_str.compare("quit") == 0) {
-    type = CloseConnection;
+  if (it != commands_map.end()) {
+    type = it->second;
+  } else {
+    type = Unknown;
   }
 
   return {type, args};

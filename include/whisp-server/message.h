@@ -1,15 +1,9 @@
 #pragma once
 
+#include "whisp-server/command.h"
 #include "whisp-server/connection.h"
 
 #include <vector>
-
-enum CommandType { Set, ListUsers, CloseConnection, Unknown };
-
-struct Command {
-    CommandType type;
-    std::vector<std::string> args;
-};
 
 class Message {
   public:
