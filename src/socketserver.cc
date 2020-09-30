@@ -58,13 +58,25 @@ void TCPSocketServer::serve() {
       }
 
       std::string username = "user" + std::to_string(connections.size());
-      Connection *conn =
-          new Connection(username, client_addr, client_len, client_fd);
-      connections.insert(conn);
+      Connection *new_conn =
+              new Connection(username, client_addr, client_len, client_fd);
+      // Send a message containing a list of all existing users to the new connection
+      std::string user_list_message;
+      if (connections.empty()) {
+        user_list_message = "[INFO] There are no users in this channel.";
+      } else {
+        user_list_message = "[INFO] Users in this channel: ";
+        for (auto conn : connections) {
+          user_list_message += conn->username + ", ";
+        }
+        user_list_message = user_list_message.substr(0, user_list_message.size() - 2) + ".";
+      }
+      send_message(user_list_message, *new_conn);
 
-      std::cout << "[INFO] new connection " << *conn << '\n';
+      std::cout << "[INFO] new connection " << *new_conn << '\n';
+      connections.insert(new_conn);
 
-      std::thread t(&TCPSocketServer::handle_connection, this, conn);
+      std::thread t(&TCPSocketServer::handle_connection, this, new_conn);
       t.detach();
     }
   }
@@ -101,6 +113,10 @@ void TCPSocketServer::handle_connection(Connection *conn) {
   }
 
   close_connection(conn);
+}
+
+void TCPSocketServer::send_message(std::string msg, Connection conn) {
+  send(conn.fd, msg.data(), msg.size(), MSG_NOSIGNAL);
 }
 
 void TCPSocketServer::broadcast(std::string msg) {

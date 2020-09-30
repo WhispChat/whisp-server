@@ -15,6 +15,7 @@ class TCPSocketServer {
 
   private:
     virtual void handle_connection(Connection *conn);
+    void send_message(std::string msg, Connection conn);
     void broadcast(std::string msg);
     bool parse_command(Connection *conn, Command cmd);
     void close_connection(Connection *conn);
