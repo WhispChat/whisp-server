@@ -58,10 +58,11 @@ void TCPSocketServer::serve() {
       }
 
       std::string username = "user" + std::to_string(connections.size());
-      Connection conn(username, client_addr, client_len, client_fd);
+      Connection *conn =
+          new Connection(username, client_addr, client_len, client_fd);
       connections.insert(conn);
 
-      std::cout << "[INFO] new connection " << conn << '\n';
+      std::cout << "[INFO] new connection " << *conn << '\n';
 
       std::thread t(&TCPSocketServer::handle_connection, this, conn);
       t.detach();
@@ -69,12 +70,18 @@ void TCPSocketServer::serve() {
   }
 }
 
-void TCPSocketServer::handle_connection(Connection conn) {
-  // TODO: more C++ way of reading to buffer using iostream?
+void TCPSocketServer::cleanup() {
+  for (auto conn : connections) {
+    close_connection(conn);
+  }
+  close(serv_fd);
+}
+
+void TCPSocketServer::handle_connection(Connection *conn) {
   char buffer[4096];
 
-  while (recv(conn.fd, buffer, sizeof buffer, 0) > 0) {
-    Message msg(conn, buffer);
+  while (recv(conn->fd, buffer, sizeof buffer, 0) > 0) {
+    Message msg(*conn, buffer);
 
     if (msg.is_command) {
       Command cmd = msg.get_command();
@@ -93,18 +100,16 @@ void TCPSocketServer::handle_connection(Connection conn) {
     bzero(buffer, sizeof buffer);
   }
 
-  std::cout << "[INFO] connection " << conn << " disconnected" << '\n';
-
   close_connection(conn);
 }
 
 void TCPSocketServer::broadcast(std::string msg) {
   for (auto conn : connections) {
-    send(conn.fd, msg.data(), msg.size(), MSG_NOSIGNAL);
+    send(conn->fd, msg.data(), msg.size(), MSG_NOSIGNAL);
   }
 }
 
-bool TCPSocketServer::parse_command(Connection &conn, Command cmd) {
+bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
   switch (cmd.type) {
   case CloseConnection:
     return true;
@@ -119,13 +124,12 @@ bool TCPSocketServer::parse_command(Connection &conn, Command cmd) {
                    [](unsigned char c) { return std::tolower(c); });
 
     if (set_variable.compare("username") == 0) {
-      conn.set_username(set_value);
-      update_connection(conn);
+      conn->set_username(set_value);
     } else {
       std::stringstream error_stream;
       error_stream << "unknown variable \"" << set_variable << "\"\n";
       std::string error_msg = error_stream.str();
-      send(conn.fd, error_msg.data(), error_msg.size(), MSG_NOSIGNAL);
+      send(conn->fd, error_msg.data(), error_msg.size(), MSG_NOSIGNAL);
     }
     break;
   }
@@ -133,33 +137,29 @@ bool TCPSocketServer::parse_command(Connection &conn, Command cmd) {
     std::stringstream connected_users;
     connected_users << "Connected users: ";
     for (auto user : connections) {
-      connected_users << user.username << " ";
+      connected_users << user->username << " ";
     }
     connected_users << '\n';
 
     std::string connected_users_str = connected_users.str();
-    send(conn.fd, connected_users_str.data(), connected_users_str.size(),
+    send(conn->fd, connected_users_str.data(), connected_users_str.size(),
          MSG_NOSIGNAL);
 
     break;
   }
   case Unknown: {
     std::string error_msg = "unknown command\n";
-    send(conn.fd, error_msg.data(), error_msg.size(), MSG_NOSIGNAL);
+    send(conn->fd, error_msg.data(), error_msg.size(), MSG_NOSIGNAL);
     break;
   }
   }
   return false;
 }
 
-void TCPSocketServer::close_connection(Connection conn) {
-  connections.erase(conn);
-  close(conn.fd);
-}
+void TCPSocketServer::close_connection(Connection *conn) {
+  std::cout << "[INFO] closing connection " << *conn << '\n';
 
-void TCPSocketServer::update_connection(Connection conn) {
+  close(conn->fd);
   connections.erase(conn);
-  connections.insert(conn);
+  delete conn;
 }
-
-TCPSocketServer::~TCPSocketServer() { close(serv_fd); }

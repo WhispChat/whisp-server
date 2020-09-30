@@ -25,5 +25,5 @@ class Connection {
 
 class ConnectionHash {
   public:
-    size_t operator()(const Connection &c) const { return c.fd; }
+    size_t operator()(const Connection *const &c) const { return c->fd; }
 };

@@ -11,15 +11,13 @@ class TCPSocketServer {
         : host(host), port(port), max_conn(max_conn) {}
     void initialize();
     void serve();
-
-    ~TCPSocketServer();
+    void cleanup();
 
   private:
-    virtual void handle_connection(Connection conn);
+    virtual void handle_connection(Connection *conn);
     void broadcast(std::string msg);
-    bool parse_command(Connection &conn, Command cmd);
-    void close_connection(Connection conn);
-    void update_connection(Connection conn);
+    bool parse_command(Connection *conn, Command cmd);
+    void close_connection(Connection *conn);
 
     const std::string &host;
     int port;
@@ -28,5 +26,5 @@ class TCPSocketServer {
     int serv_fd;
     struct sockaddr_in serv_addr;
 
-    std::unordered_set<Connection, ConnectionHash> connections;
+    std::unordered_set<Connection *, ConnectionHash> connections;
 };
