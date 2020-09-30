@@ -142,14 +142,18 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
     break;
   case Set: {
     std::string set_variable = cmd.args.at(0);
-    std::string set_value = cmd.args.at(1);
 
     // make set variable case insensitive
     std::transform(set_variable.begin(), set_variable.end(),
                    set_variable.begin(),
                    [](unsigned char c) { return std::tolower(c); });
 
-    if (set_variable.compare("username") == 0) {
+    if (cmd.args.size() <= 1) {
+      std::string error_msg =
+          "[ERROR] Not enough arguments for set - need 2.\n";
+      send_message(error_msg, *conn);
+    } else if (set_variable.compare("username") == 0) {
+      std::string set_value = cmd.args.at(1);
       std::string old_username = conn->username;
       conn->set_username(set_value);
       std::string username_message = "[INFO] " + old_username +
@@ -157,9 +161,8 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
                                      conn->username + ".\n";
       broadcast(username_message);
     } else {
-      std::stringstream error_stream;
-      error_stream << "[ERROR] Unknown variable \"" << set_variable << "\"\n";
-      std::string error_msg = error_stream.str();
+      std::string error_msg =
+          "[ERROR] Unknown variable \"" + set_variable + "\".\n";
       send_message(error_msg, *conn);
     }
     break;
