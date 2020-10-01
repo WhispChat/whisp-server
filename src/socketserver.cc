@@ -1,5 +1,6 @@
 #include "whisp-server/socketserver.h"
 #include "whisp-server/connection.h"
+#include "whisp-server/encryption.h"
 #include "whisp-server/message.h"
 
 #include <algorithm>
@@ -103,6 +104,8 @@ void TCPSocketServer::handle_connection(Connection *conn) {
   char buffer[4096];
 
   while (recv(conn->fd, buffer, sizeof buffer, 0) > 0) {
+    // TODO: decrypt buffer msg
+
     Message msg(*conn, buffer);
 
     if (msg.is_command) {
@@ -126,6 +129,7 @@ void TCPSocketServer::handle_connection(Connection *conn) {
 }
 
 void TCPSocketServer::send_message(std::string msg, Connection conn) {
+  // TODO: encrypt msg
   send(conn.fd, msg.data(), msg.size(), MSG_NOSIGNAL);
 }
 
