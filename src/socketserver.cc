@@ -1,6 +1,5 @@
 #include "whisp-server/socketserver.h"
 #include "whisp-server/connection.h"
-#include "whisp-server/encryption.h"
 #include "whisp-server/message.h"
 
 #include <algorithm>
@@ -129,7 +128,7 @@ void TCPSocketServer::handle_connection(Connection *conn) {
 }
 
 void TCPSocketServer::send_message(std::string msg, Connection conn) {
-  std::string encrypted_msg = Encryption::encrypt(msg, OneTimePad);
+  std::string encrypted_msg = Encryption::encrypt(msg, Encryption::OneTimePad);
   send(conn.fd, encrypted_msg.data(), encrypted_msg.size(), MSG_NOSIGNAL);
 }
 
