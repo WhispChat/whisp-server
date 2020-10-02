@@ -104,9 +104,10 @@ void TCPSocketServer::handle_connection(Connection *conn) {
   char buffer[4096];
 
   while (recv(conn->fd, buffer, sizeof buffer, 0) > 0) {
-    // TODO: decrypt buffer msg
-
-    Message msg(*conn, buffer);
+    std::string decrypted_buffer(buffer);
+    decrypted_buffer =
+        Encryption::decrypt(decrypted_buffer, Encryption::OneTimePad);
+    Message msg(*conn, decrypted_buffer);
 
     if (msg.is_command) {
       Command cmd = msg.get_command();
