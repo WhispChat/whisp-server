@@ -1,6 +1,7 @@
 #pragma once
 
 #include "whisp-server/connection.h"
+#include "whisp-server/encryption.h"
 #include "whisp-server/message.h"
 #include <string>
 #include <unordered_set>

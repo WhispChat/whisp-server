@@ -129,8 +129,8 @@ void TCPSocketServer::handle_connection(Connection *conn) {
 }
 
 void TCPSocketServer::send_message(std::string msg, Connection conn) {
-  // TODO: encrypt msg
-  send(conn.fd, msg.data(), msg.size(), MSG_NOSIGNAL);
+  std::string encrypted_msg = Encryption::encrypt(msg, OneTimePad);
+  send(conn.fd, encrypted_msg.data(), encrypted_msg.size(), MSG_NOSIGNAL);
 }
 
 void TCPSocketServer::broadcast(std::string msg) {
