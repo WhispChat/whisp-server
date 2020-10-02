@@ -1,5 +1,6 @@
 #include "whisp-server/socketserver.h"
 #include "whisp-server/connection.h"
+#include "whisp-server/encryption.h"
 #include "whisp-server/message.h"
 
 #include <algorithm>
