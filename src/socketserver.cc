@@ -131,6 +131,10 @@ void TCPSocketServer::handle_connection(Connection *conn) {
 
 void TCPSocketServer::send_message(std::string msg, Connection conn) {
   std::string encrypted_msg = Encryption::encrypt(msg, Encryption::OneTimePad);
+  // Message receives ASCII character 23, "End of Trans. Block"
+  // This is in case the TCP socket sends multiple messages in one packet
+  // TODO: Perhaps the delimiter should also be encrypted
+  encrypted_msg += 23;
   send(conn.fd, encrypted_msg.data(), encrypted_msg.size(), MSG_NOSIGNAL);
 }
 
