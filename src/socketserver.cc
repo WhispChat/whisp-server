@@ -120,7 +120,7 @@ void TCPSocketServer::handle_connection(Connection *conn) {
 
       broadcast(message_str);
 
-      std::cout << message_str << '\n';
+      // std::cout << message_str << '\n';
     }
 
     bzero(buffer, sizeof buffer);
