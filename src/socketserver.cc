@@ -65,22 +65,22 @@ void TCPSocketServer::serve() {
       // Broadcast a message to all existing connections to inform about the new
       // connection
       std::string user_joined_message =
-          "[INFO] " + username + " has joined the channel.\n";
+          "[INFO] " + username + " has joined the channel.";
       broadcast(user_joined_message);
 
       // Send a welcome message to the new connection
       std::string welcome_message =
-          "[INFO] Welcome to the channel, " + username + "!\n";
+          "[INFO] Welcome to the channel, " + username + "!";
       send_message(welcome_message, *new_conn);
 
       // Send a message containing a list of all existing users to the new
       // connection
       std::string user_list_message;
       if (connections.empty()) {
-        user_list_message = "[INFO] There are no users in this channel.\n";
+        user_list_message = "[INFO] There are no users in this channel.";
       } else {
         user_list_message =
-            "[INFO] Users in this channel: " + get_users_list() + ".\n";
+            "[INFO] Users in this channel: " + get_users_list() + ".";
       }
       send_message(user_list_message, *new_conn);
 
@@ -152,7 +152,7 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
   case Set: {
     if (cmd.args.size() != 2) {
       std::string error_msg =
-          "[ERROR] Incorrect amount of arguments for set - expected 2.\n";
+          "[ERROR] Incorrect amount of arguments for set - expected 2.";
       send_message(error_msg, *conn);
       break;
     }
@@ -170,24 +170,24 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
       conn->set_username(set_value);
       std::string username_message = "[INFO] " + old_username +
                                      " changed their username to " +
-                                     conn->username + ".\n";
+                                     conn->username + ".";
       broadcast(username_message);
     } else {
       std::string error_msg =
-          "[ERROR] Unknown variable \"" + set_variable + "\".\n";
+          "[ERROR] Unknown variable \"" + set_variable + "\".";
       send_message(error_msg, *conn);
     }
     break;
   }
   case ListUsers: {
     std::string user_list_message =
-        "[INFO] Users in this channel: " + get_users_list() + ".\n";
+        "[INFO] Users in this channel: " + get_users_list() + ".";
     send_message(user_list_message, *conn);
 
     break;
   }
   case Unknown: {
-    std::string error_msg = "[ERROR] Unknown command\n";
+    std::string error_msg = "[ERROR] Unknown command";
     send_message(error_msg, *conn);
     break;
   }
