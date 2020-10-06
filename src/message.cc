@@ -7,7 +7,7 @@
 #include <sstream>
 #include <string>
 
-Message::Message(Connection conn, char *message)
+Message::Message(Connection conn, std::string message)
     : conn(conn), message(message) {
   if (this->message.front() == '/') {
     is_command = true;

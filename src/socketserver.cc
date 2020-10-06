@@ -1,5 +1,6 @@
 #include "whisp-server/socketserver.h"
 #include "whisp-server/connection.h"
+#include "whisp-server/encryption.h"
 #include "whisp-server/message.h"
 
 #include <algorithm>
@@ -103,7 +104,10 @@ void TCPSocketServer::handle_connection(Connection *conn) {
   char buffer[4096];
 
   while (recv(conn->fd, buffer, sizeof buffer, 0) > 0) {
-    Message msg(*conn, buffer);
+    std::string decrypted_buffer(buffer);
+    decrypted_buffer =
+        Encryption::decrypt(decrypted_buffer, Encryption::OneTimePad);
+    Message msg(*conn, decrypted_buffer);
 
     if (msg.is_command) {
       Command cmd = msg.get_command();
@@ -116,7 +120,7 @@ void TCPSocketServer::handle_connection(Connection *conn) {
 
       broadcast(message_str);
 
-      std::cout << message_str << '\n';
+      // std::cout << message_str << '\n';
     }
 
     bzero(buffer, sizeof buffer);
@@ -126,7 +130,12 @@ void TCPSocketServer::handle_connection(Connection *conn) {
 }
 
 void TCPSocketServer::send_message(std::string msg, Connection conn) {
-  send(conn.fd, msg.data(), msg.size(), MSG_NOSIGNAL);
+  std::string encrypted_msg = Encryption::encrypt(msg, Encryption::OneTimePad);
+  // Message receives ASCII character 23, "End of Trans. Block"
+  // This is in case the TCP socket sends multiple messages in one packet
+  // TODO: Perhaps the delimiter should also be encrypted
+  encrypted_msg += 23;
+  send(conn.fd, encrypted_msg.data(), encrypted_msg.size(), MSG_NOSIGNAL);
 }
 
 void TCPSocketServer::broadcast(std::string msg) {

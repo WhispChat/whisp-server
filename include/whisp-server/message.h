@@ -7,7 +7,7 @@
 
 class Message {
   public:
-    Message(Connection conn, char *message);
+    Message(Connection conn, std::string message);
 
     std::string get_fmt_str();
     Command get_command();
