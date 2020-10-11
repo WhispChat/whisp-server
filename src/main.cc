@@ -43,7 +43,8 @@ int main(int argc, char **argv) {
   };
   int c;
 
-  while ((c = getopt_long(argc, argv, "dvhp:H:m:", long_options, NULL)) != -1) {
+  while ((c = getopt_long(argc, argv, "dvhp:H:m:", long_options, nullptr)) !=
+         -1) {
     switch (c) {
     case 'd':
       debug = 1;
