@@ -51,4 +51,4 @@ struct LoggerProxy {
 #define LOG_INFO                                                               \
     LoggerProxy { Info }
 #define LOG_ERROR                                                              \
-    LoggerProxy { Info }
+    LoggerProxy { Error }
