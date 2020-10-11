@@ -73,8 +73,13 @@ int main(int argc, char **argv) {
   }
 
   TCPSocketServer ss(host, port, max_conn);
-  ss.initialize();
-  ss.serve();
+
+  try {
+    ss.initialize();
+    ss.serve();
+  } catch (char const *msg) {
+    LOG_ERROR << msg << '\n';
+  }
 
   return EXIT_SUCCESS;
 }
