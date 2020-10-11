@@ -1,6 +1,7 @@
 #include "whisp-server/socketserver.h"
 #include "whisp-server/connection.h"
 #include "whisp-server/encryption.h"
+#include "whisp-server/logging.h"
 #include "whisp-server/message.h"
 
 #include <algorithm>
@@ -42,7 +43,7 @@ void TCPSocketServer::initialize() {
 }
 
 void TCPSocketServer::serve() {
-  std::cout << "[INFO] Listening on " << host << ":" << port << '\n';
+  LOG_INFO << "Listening on " << host << ":" << port << '\n';
 
   while (1) {
     int client_fd = -1;
@@ -54,7 +55,7 @@ void TCPSocketServer::serve() {
       client_fd = accept(serv_fd, (struct sockaddr *)&client_addr, &client_len);
 
       if (client_fd == -1) {
-        std::cout << "[ERROR] failed to connect to incoming connection" << '\n';
+        LOG_ERROR << "Failed to connect to incoming connection\n";
         continue;
       }
 
@@ -84,7 +85,7 @@ void TCPSocketServer::serve() {
       }
       send_message(user_list_message, *new_conn);
 
-      std::cout << "[INFO] new connection " << *new_conn << '\n';
+      LOG_INFO << "New connection " << *new_conn << '\n';
       connections.insert(new_conn);
 
       std::thread t(&TCPSocketServer::handle_connection, this, new_conn);
@@ -120,7 +121,7 @@ void TCPSocketServer::handle_connection(Connection *conn) {
 
       broadcast(message_str);
 
-      // std::cout << message_str << '\n';
+      LOG_DEBUG << message_str << '\n';
     }
 
     bzero(buffer, sizeof buffer);
@@ -196,7 +197,7 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
 }
 
 void TCPSocketServer::close_connection(Connection *conn) {
-  std::cout << "[INFO] closing connection " << *conn << '\n';
+  LOG_INFO << "Closing connection " << *conn << '\n';
 
   close(conn->fd);
   connections.erase(conn);
