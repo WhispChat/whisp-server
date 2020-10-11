@@ -6,27 +6,27 @@
 #include <unordered_set>
 
 class TCPSocketServer {
-  public:
-    TCPSocketServer(const std::string &host, int port, std::size_t max_conn)
-        : host(host), port(port), max_conn(max_conn) {}
-    void initialize();
-    void serve();
-    void cleanup();
+public:
+  TCPSocketServer(const std::string &host, int port, std::size_t max_conn)
+      : host(host), port(port), max_conn(max_conn) {}
+  void initialize();
+  void serve();
+  void cleanup();
 
-  private:
-    virtual void handle_connection(Connection *conn);
-    void send_message(std::string msg, Connection conn);
-    void broadcast(std::string msg);
-    bool parse_command(Connection *conn, Command cmd);
-    void close_connection(Connection *conn);
-    std::string get_users_list();
+private:
+  virtual void handle_connection(Connection *conn);
+  void send_message(std::string msg, Connection conn);
+  void broadcast(std::string msg);
+  bool parse_command(Connection *conn, Command cmd);
+  void close_connection(Connection *conn);
+  std::string get_users_list();
 
-    const std::string &host;
-    int port;
-    std::size_t max_conn;
+  const std::string &host;
+  int port;
+  std::size_t max_conn;
 
-    int serv_fd;
-    struct sockaddr_in serv_addr;
+  int serv_fd;
+  struct sockaddr_in serv_addr;
 
-    std::unordered_set<Connection *, ConnectionHash> connections;
+  std::unordered_set<Connection *, ConnectionHash> connections;
 };
