@@ -42,6 +42,7 @@ int main(int argc, char **argv) {
       {nullptr, 0, nullptr, 0},
   };
   int c;
+  bool fail;
 
   while ((c = getopt_long(argc, argv, "dvhp:H:m:", long_options, nullptr)) !=
          -1) {
@@ -57,7 +58,7 @@ int main(int argc, char **argv) {
       port = atoi(optarg);
       if (port == 0) {
         std::cout << "invalid port number\n";
-        return EXIT_FAILURE;
+        fail = true;
       }
       break;
     case 'H':
@@ -67,10 +68,14 @@ int main(int argc, char **argv) {
       max_conn = atoi(optarg);
       if (max_conn == 0) {
         std::cout << "invalid number of max connections\n";
-        return EXIT_FAILURE;
+        fail = true;
       }
       break;
     }
+  }
+
+  if (fail) {
+    return EXIT_FAILURE;
   }
 
   TCPSocketServer ss(host, port, max_conn);
