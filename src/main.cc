@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
       break;
     case 'm':
       max_conn = atoi(optarg);
-      if (port == 0) {
+      if (max_conn == 0) {
         std::cout << "invalid number of max connections\n";
         return EXIT_FAILURE;
       }
