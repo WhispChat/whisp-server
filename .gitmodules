@@ -1,0 +1,3 @@
+[submodule "whisp-protobuf"]
+	path = include/whisp-protobuf
+	url = git@github.com:WhispChat/whisp-protobuf.git
