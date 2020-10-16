@@ -1,8 +1,8 @@
 #pragma once
 
+#include "whisp-protobuf/cpp/client.pb.h"
 #include "whisp-protobuf/cpp/server.pb.h"
 #include "whisp-server/connection.h"
-#include "whisp-server/message.h"
 #include <string>
 #include <unordered_set>
 
@@ -18,7 +18,7 @@ private:
   virtual void handle_connection(Connection *conn);
   void send_message(const google::protobuf::Message &msg, Connection conn);
   void broadcast(const google::protobuf::Message &msg);
-  bool parse_command(Connection *conn, Command cmd);
+  bool parse_command(Connection *conn, client::Command cmd);
   void close_connection(Connection *conn);
   std::string get_users_list();
   server::Status get_server_status();

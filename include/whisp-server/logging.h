@@ -19,7 +19,7 @@ struct LoggerProxy {
       }
       break;
     case Info:
-      std::cout << "[INFO] ";
+      std::cout << "[INFO ] ";
       break;
     case Error:
       std::cerr << "[ERROR] ";

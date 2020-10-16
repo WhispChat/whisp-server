@@ -1,6 +1,7 @@
 #pragma once
 
 #include <arpa/inet.h>
+#include <iostream>
 #include <string>
 
 class Connection {
@@ -13,7 +14,8 @@ public:
 
   bool operator==(const Connection &c) const { return this->fd == c.fd; }
   friend std::ostream &operator<<(std::ostream &os, const Connection &c) {
-    os << c.username;
+    os << "<" << c.username << " " << inet_ntoa(c.addr.sin_addr) << ":"
+       << c.addr.sin_port << ">";
     return os;
   }
 
