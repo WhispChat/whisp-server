@@ -5,6 +5,8 @@
 #include "whisp-server/message.h"
 
 #include <algorithm>
+#include <google/protobuf/any.pb.h>
+#include <google/protobuf/timestamp.pb.h>
 #include <iostream>
 #include <string.h>
 #include <string>
@@ -63,27 +65,28 @@ void TCPSocketServer::serve() {
       Connection *new_conn =
           new Connection(username, client_addr, client_len, client_fd);
 
-      // Broadcast a message to all existing connections to inform about the new
-      // connection
-      std::string user_joined_message =
-          "[INFO] " + username + " has joined the channel.";
-      broadcast(user_joined_message);
+      send_message(get_server_status(), *new_conn);
+
+      // Broadcast a message to all existing connections to inform about the
+      // new connection
+      std::string user_joined_message = username + " has joined the channel.";
+      broadcast(create_message(server::Message::INFO, user_joined_message));
 
       // Send a welcome message to the new connection
-      std::string welcome_message =
-          "[INFO] Welcome to the channel, " + username + "!";
-      send_message(welcome_message, *new_conn);
+      std::string welcome_message = "Welcome to the channel, " + username + "!";
+      send_message(create_message(server::Message::INFO, welcome_message),
+                   *new_conn);
 
       // Send a message containing a list of all existing users to the new
       // connection
       std::string user_list_message;
       if (connections.empty()) {
-        user_list_message = "[INFO] There are no users in this channel.";
+        user_list_message = "There are no users in this channel.";
       } else {
-        user_list_message =
-            "[INFO] Users in this channel: " + get_users_list() + ".";
+        user_list_message = "Users in this channel: " + get_users_list() + ".";
       }
-      send_message(user_list_message, *new_conn);
+      send_message(create_message(server::Message::INFO, user_list_message),
+                   *new_conn);
 
       LOG_INFO << "New connection " << *new_conn << '\n';
       connections.insert(new_conn);
@@ -119,27 +122,37 @@ void TCPSocketServer::handle_connection(Connection *conn) {
     } else {
       std::string message_str = msg.get_fmt_str();
 
-      broadcast(message_str);
+      // TODO: protobuf for client messages
+      // broadcast(message_str);
 
       LOG_DEBUG << message_str << '\n';
     }
 
-    bzero(buffer, sizeof buffer);
+    memset(buffer, 0, sizeof buffer);
   }
 
   close_connection(conn);
 }
 
-void TCPSocketServer::send_message(std::string msg, Connection conn) {
-  std::string encrypted_msg = Encryption::encrypt(msg, Encryption::OneTimePad);
+void TCPSocketServer::send_message(const google::protobuf::Message &msg,
+                                   Connection conn) {
+  google::protobuf::Any any;
+  any.PackFrom(msg);
+
+  std::string msg_str;
+  any.SerializeToString(&msg_str);
+
+  std::string encrypted_msg =
+      Encryption::encrypt(msg_str, Encryption::OneTimePad);
   // Message receives ASCII character 23, "End of Trans. Block"
   // This is in case the TCP socket sends multiple messages in one packet
   // TODO: Perhaps the delimiter should also be encrypted
   encrypted_msg += 23;
+
   send(conn.fd, encrypted_msg.data(), encrypted_msg.size(), MSG_NOSIGNAL);
 }
 
-void TCPSocketServer::broadcast(std::string msg) {
+void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
   for (auto conn : connections) {
     send_message(msg, *conn);
   }
@@ -153,8 +166,8 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
   case Set: {
     if (cmd.args.size() != 2) {
       std::string error_msg =
-          "[ERROR] Incorrect amount of arguments for set - expected 2.";
-      send_message(error_msg, *conn);
+          "Incorrect amount of arguments for set - expected 2.";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
       break;
     }
 
@@ -169,27 +182,27 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
     if (set_variable.compare("username") == 0) {
       std::string old_username = conn->username;
       conn->set_username(set_value);
-      std::string username_message = "[INFO] " + old_username +
-                                     " changed their username to " +
-                                     conn->username + ".";
-      broadcast(username_message);
+      std::string username_message =
+          old_username + " changed their username to " + conn->username + ".";
+      broadcast(create_message(server::Message::INFO, username_message));
     } else {
-      std::string error_msg =
-          "[ERROR] Unknown variable \"" + set_variable + "\".";
-      send_message(error_msg, *conn);
+      std::string error_msg = "Unknown variable \"" + set_variable + "\".";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
     }
     break;
   }
   case ListUsers: {
     std::string user_list_message =
-        "[INFO] Users in this channel: " + get_users_list() + ".";
-    send_message(user_list_message, *conn);
+        "Users in this channel: " + get_users_list() + ".";
+    send_message(create_message(server::Message::INFO, user_list_message),
+                 *conn);
 
     break;
   }
   case Unknown: {
-    std::string error_msg = "[ERROR] Unknown command";
-    send_message(error_msg, *conn);
+    std::string error_msg = "Unknown command";
+
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
     break;
   }
   }
@@ -210,7 +223,34 @@ std::string TCPSocketServer::get_users_list() {
   for (auto conn : connections) {
     user_list_message += conn->username + ", ";
   }
-  user_list_message = user_list_message.substr(0, user_list_message.size() - 2);
-
-  return user_list_message;
+  return user_list_message.substr(0, user_list_message.size() - 2);
 }
+
+server::Status TCPSocketServer::get_server_status() {
+  server::Status status;
+  status.set_full(connections.size() >= max_conn);
+  status.set_number_connections(connections.size());
+
+  google::protobuf::Timestamp timestamp;
+  timestamp.set_seconds(time(NULL));
+  timestamp.set_nanos(0);
+  status.set_timestamp(timestamp);
+
+  return status;
+}
+
+server::Message
+TCPSocketServer::create_message(server::Message::MessageType type,
+                                std::string content) {
+  server::Message msg;
+  msg.set_type(type);
+  msg.set_content(content);
+
+  google::protobuf::Timestamp timestamp;
+  timestamp.set_seconds(time(NULL));
+  timestamp.set_nanos(0);
+  msg.set_timestamp(timestamp);
+
+  return msg;
+}
+

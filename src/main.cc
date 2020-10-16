@@ -29,6 +29,10 @@ void help(char **argv) {
 }
 
 int main(int argc, char **argv) {
+  // verify that the version of the library that we linked against is
+  // compatible with the version of the headers we compiled against.
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
+
   int port = DEFAULT_PORT;
   std::size_t max_conn = DEFAULT_MAX_CONN;
   std::string host = DEFAULT_HOST;
