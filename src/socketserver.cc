@@ -175,9 +175,9 @@ bool TCPSocketServer::parse_command(Connection *conn, client::Command cmd) {
   const google::protobuf::RepeatedPtrField<std::string> &args = cmd.args();
   std::string type = cmd.type();
 
-  if (type == "quit") {
+  if (type.compare("quit") == 0) {
     return true;
-  } else if (type == "set") {
+  } else if (type.compare("set") == 0) {
     if (args.size() != 2) {
       std::string error_msg =
           "Incorrect amount of arguments for set - expected 2.";
@@ -205,7 +205,7 @@ bool TCPSocketServer::parse_command(Connection *conn, client::Command cmd) {
       std::string error_msg = "Unknown variable \"" + set_variable + "\".";
       send_message(create_message(server::Message::ERROR, error_msg), *conn);
     }
-  } else if (type == "users") {
+  } else if (type.compare("users") == 0) {
     std::string user_list_message =
         "Users in this channel: " + get_users_list() + ".";
     send_message(create_message(server::Message::INFO, user_list_message),
