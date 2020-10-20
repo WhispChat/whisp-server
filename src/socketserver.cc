@@ -235,7 +235,7 @@ std::string TCPSocketServer::get_users_list() {
 
 server::Status TCPSocketServer::get_server_status() {
   server::Status status;
-  status.set_full(connections.size() >= max_conn);
+  status.set_max_connections(max_conn);
   status.set_number_connections(connections.size());
 
   return status;
