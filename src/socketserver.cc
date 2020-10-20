@@ -119,26 +119,22 @@ void TCPSocketServer::handle_connection(Connection *conn) {
     std::string decrypted_buffer(buffer);
     decrypted_buffer =
         Encryption::decrypt(decrypted_buffer, Encryption::OneTimePad);
-    google::protobuf::Any any;
-    any.ParseFromString(decrypted_buffer);
 
-    if (any.Is<client::Message>()) {
-      client::Message user_msg;
-      any.UnpackTo(&user_msg);
+    client::Message user_msg;
+    user_msg.ParseFromString(decrypted_buffer);
 
+    if (Command::is_command(user_msg.content())) {
+      Command cmd(user_msg.content());
+      bool close_conn = parse_command(conn, cmd);
+      if (close_conn) {
+        break;
+      }
+    } else {
       user_msg.set_username(conn->username);
 
       broadcast(user_msg);
 
       LOG_DEBUG << user_msg.username() << ": " << user_msg.content() << '\n';
-    } else if (any.Is<client::Command>()) {
-      client::Command cmd;
-      any.UnpackTo(&cmd);
-
-      bool close_conn = parse_command(conn, cmd);
-      if (close_conn) {
-        break;
-      }
     }
 
     memset(buffer, 0, sizeof buffer);
@@ -171,9 +167,9 @@ void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
   }
 }
 
-bool TCPSocketServer::parse_command(Connection *conn, client::Command cmd) {
-  const google::protobuf::RepeatedPtrField<std::string> &args = cmd.args();
-  std::string type = cmd.type();
+bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
+  std::vector<std::string> args = cmd.args;
+  std::string type = cmd.type;
 
   if (type.compare("quit") == 0) {
     return true;
