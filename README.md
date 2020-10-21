@@ -11,7 +11,7 @@ platform.
 ## Installation
 1. Clone repository:
 ```bash
-git clone git@github.com:WhispChat/whisp-server.git
+git clone --recurse-submodules git@github.com:WhispChat/whisp-server.git
 ```
 2. Create build directory:
 ```bash
