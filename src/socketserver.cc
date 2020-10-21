@@ -2,9 +2,10 @@
 #include "whisp-server/connection.h"
 #include "whisp-server/encryption.h"
 #include "whisp-server/logging.h"
-#include "whisp-server/message.h"
 
 #include <algorithm>
+#include <google/protobuf/any.pb.h>
+#include <google/protobuf/repeated_field.h>
 #include <iostream>
 #include <string.h>
 #include <string>
@@ -44,53 +45,63 @@ void TCPSocketServer::initialize() {
 
 void TCPSocketServer::serve() {
   LOG_INFO << "Listening on " << host << ":" << port << '\n';
+  LOG_DEBUG << "Max connections: " << max_conn << '\n';
+  LOG_DEBUG << "Server file descriptor: " << serv_fd << '\n';
 
   while (1) {
     int client_fd = -1;
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
 
-    if (connections.size() < max_conn) {
-      // Accept connection if we're not at max connections
-      client_fd = accept(serv_fd, (struct sockaddr *)&client_addr, &client_len);
+    client_fd = accept(serv_fd, (struct sockaddr *)&client_addr, &client_len);
 
-      if (client_fd == -1) {
-        LOG_ERROR << "Failed to connect to incoming connection\n";
-        continue;
-      }
-
-      std::string username = "user" + std::to_string(connections.size());
-      Connection *new_conn =
-          new Connection(username, client_addr, client_len, client_fd);
-
-      // Broadcast a message to all existing connections to inform about the new
-      // connection
-      std::string user_joined_message =
-          "[INFO] " + username + " has joined the channel.";
-      broadcast(user_joined_message);
-
-      // Send a welcome message to the new connection
-      std::string welcome_message =
-          "[INFO] Welcome to the channel, " + username + "!";
-      send_message(welcome_message, *new_conn);
-
-      // Send a message containing a list of all existing users to the new
-      // connection
-      std::string user_list_message;
-      if (connections.empty()) {
-        user_list_message = "[INFO] There are no users in this channel.";
-      } else {
-        user_list_message =
-            "[INFO] Users in this channel: " + get_users_list() + ".";
-      }
-      send_message(user_list_message, *new_conn);
-
-      LOG_INFO << "New connection " << *new_conn << '\n';
-      connections.insert(new_conn);
-
-      std::thread t(&TCPSocketServer::handle_connection, this, new_conn);
-      t.detach();
+    if (client_fd == -1) {
+      LOG_ERROR << "Failed to connect to incoming connection\n";
+      continue;
     }
+
+    std::string username = "user" + std::to_string(connections.size());
+    Connection *new_conn =
+        new Connection(username, client_addr, client_len, client_fd);
+
+    // Always send server status to new client even when max connections is
+    // reached so client knows the server is full
+    send_message(get_server_status(), *new_conn);
+
+    if (connections.size() >= max_conn) {
+      // Deny connection if we're at max connections
+      LOG_DEBUG << "Denying new connection " << *new_conn << ": server full."
+                << '\n';
+      close_connection(new_conn);
+      continue;
+    }
+
+    // Broadcast a message to all existing connections to inform about the
+    // new connection
+    std::string user_joined_message = username + " has joined the channel.";
+    broadcast(create_message(server::Message::INFO, user_joined_message));
+
+    // Send a welcome message to the new connection
+    std::string welcome_message = "Welcome to the channel, " + username + "!";
+    send_message(create_message(server::Message::INFO, welcome_message),
+                 *new_conn);
+
+    LOG_INFO << "New connection " << *new_conn << '\n';
+    connections.insert(new_conn);
+
+    // Send a message containing a list of all existing users to the new
+    // connection
+    std::string user_list_message;
+    if (connections.empty()) {
+      user_list_message = "There are no users in this channel.";
+    } else {
+      user_list_message = "Users in this channel: " + get_users_list() + ".";
+    }
+    send_message(create_message(server::Message::INFO, user_list_message),
+                 *new_conn);
+
+    std::thread t(&TCPSocketServer::handle_connection, this, new_conn);
+    t.detach();
   }
 }
 
@@ -108,58 +119,70 @@ void TCPSocketServer::handle_connection(Connection *conn) {
     std::string decrypted_buffer(buffer);
     decrypted_buffer =
         Encryption::decrypt(decrypted_buffer, Encryption::OneTimePad);
-    Message msg(*conn, decrypted_buffer);
 
-    if (msg.is_command) {
-      Command cmd = msg.get_command();
+    client::Message user_msg;
+    user_msg.ParseFromString(decrypted_buffer);
+
+    if (Command::is_command(user_msg.content())) {
+      Command cmd(user_msg.content());
       bool close_conn = parse_command(conn, cmd);
       if (close_conn) {
         break;
       }
     } else {
-      std::string message_str = msg.get_fmt_str();
+      user_msg.set_username(conn->username);
 
-      broadcast(message_str);
+      broadcast(user_msg);
 
-      LOG_DEBUG << message_str << '\n';
+      LOG_DEBUG << user_msg.username() << ": " << user_msg.content() << '\n';
     }
 
-    bzero(buffer, sizeof buffer);
+    memset(buffer, 0, sizeof buffer);
   }
 
   close_connection(conn);
 }
 
-void TCPSocketServer::send_message(std::string msg, Connection conn) {
-  std::string encrypted_msg = Encryption::encrypt(msg, Encryption::OneTimePad);
+void TCPSocketServer::send_message(const google::protobuf::Message &msg,
+                                   Connection conn) {
+  google::protobuf::Any any;
+  any.PackFrom(msg);
+
+  std::string msg_str;
+  any.SerializeToString(&msg_str);
+
+  std::string encrypted_msg =
+      Encryption::encrypt(msg_str, Encryption::OneTimePad);
   // Message receives ASCII character 23, "End of Trans. Block"
   // This is in case the TCP socket sends multiple messages in one packet
   // TODO: Perhaps the delimiter should also be encrypted
   encrypted_msg += 23;
+
   send(conn.fd, encrypted_msg.data(), encrypted_msg.size(), MSG_NOSIGNAL);
 }
 
-void TCPSocketServer::broadcast(std::string msg) {
+void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
   for (auto conn : connections) {
     send_message(msg, *conn);
   }
 }
 
 bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
-  switch (cmd.type) {
-  case CloseConnection:
+  std::vector<std::string> args = cmd.args;
+  std::string type = cmd.type;
+
+  if (type.compare("quit") == 0) {
     return true;
-    break;
-  case Set: {
-    if (cmd.args.size() != 2) {
+  } else if (type.compare("set") == 0) {
+    if (args.size() != 2) {
       std::string error_msg =
-          "[ERROR] Incorrect amount of arguments for set - expected 2.";
-      send_message(error_msg, *conn);
-      break;
+          "Incorrect amount of arguments for set - expected 2.";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      return false;
     }
 
-    std::string set_variable = cmd.args.at(0);
-    std::string set_value = cmd.args.at(1);
+    std::string set_variable = args.at(0);
+    std::string set_value = args.at(1);
 
     // make set variable case insensitive
     std::transform(set_variable.begin(), set_variable.end(),
@@ -169,35 +192,32 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
     if (set_variable.compare("username") == 0) {
       std::string old_username = conn->username;
       conn->set_username(set_value);
-      std::string username_message = "[INFO] " + old_username +
-                                     " changed their username to " +
-                                     conn->username + ".";
-      broadcast(username_message);
-    } else {
-      std::string error_msg =
-          "[ERROR] Unknown variable \"" + set_variable + "\".";
-      send_message(error_msg, *conn);
-    }
-    break;
-  }
-  case ListUsers: {
-    std::string user_list_message =
-        "[INFO] Users in this channel: " + get_users_list() + ".";
-    send_message(user_list_message, *conn);
+      std::string username_message =
+          old_username + " changed their username to " + conn->username + ".";
 
-    break;
+      LOG_DEBUG << username_message << '\n';
+      broadcast(create_message(server::Message::INFO, username_message));
+    } else {
+      std::string error_msg = "Unknown variable \"" + set_variable + "\".";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    }
+  } else if (type.compare("users") == 0) {
+    std::string user_list_message =
+        "Users in this channel: " + get_users_list() + ".";
+    send_message(create_message(server::Message::INFO, user_list_message),
+                 *conn);
+
+  } else {
+    std::string error_msg = "Unknown command";
+
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
   }
-  case Unknown: {
-    std::string error_msg = "[ERROR] Unknown command";
-    send_message(error_msg, *conn);
-    break;
-  }
-  }
+
   return false;
 }
 
 void TCPSocketServer::close_connection(Connection *conn) {
-  LOG_INFO << "Closing connection " << *conn << '\n';
+  LOG_INFO << "Connection " << *conn << " disconnected" << '\n';
 
   close(conn->fd);
   connections.erase(conn);
@@ -210,7 +230,23 @@ std::string TCPSocketServer::get_users_list() {
   for (auto conn : connections) {
     user_list_message += conn->username + ", ";
   }
-  user_list_message = user_list_message.substr(0, user_list_message.size() - 2);
+  return user_list_message.substr(0, user_list_message.size() - 2);
+}
 
-  return user_list_message;
+server::Status TCPSocketServer::get_server_status() {
+  server::Status status;
+  status.set_max_connections(max_conn);
+  status.set_number_connections(connections.size());
+
+  return status;
+}
+
+server::Message
+TCPSocketServer::create_message(server::Message::MessageType type,
+                                std::string content) {
+  server::Message msg;
+  msg.set_type(type);
+  msg.set_content(content);
+
+  return msg;
 }

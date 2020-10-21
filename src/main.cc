@@ -29,6 +29,10 @@ void help(char **argv) {
 }
 
 int main(int argc, char **argv) {
+  // verify that the version of the library that we linked against is
+  // compatible with the version of the headers we compiled against.
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
+
   int port = DEFAULT_PORT;
   std::size_t max_conn = DEFAULT_MAX_CONN;
   std::string host = DEFAULT_HOST;
@@ -42,7 +46,7 @@ int main(int argc, char **argv) {
       {nullptr, 0, nullptr, 0},
   };
   int c;
-  bool fail;
+  bool fail = false;
 
   while ((c = getopt_long(argc, argv, "dvhp:H:m:", long_options, nullptr)) !=
          -1) {
@@ -53,11 +57,10 @@ int main(int argc, char **argv) {
     case 'h':
       help(argv);
       return EXIT_SUCCESS;
-      break;
     case 'p':
       port = atoi(optarg);
       if (port == 0) {
-        std::cout << "invalid port number\n";
+        LOG_ERROR << "invalid port number\n";
         fail = true;
       }
       break;
@@ -67,7 +70,7 @@ int main(int argc, char **argv) {
     case 'm':
       max_conn = atoi(optarg);
       if (max_conn == 0) {
-        std::cout << "invalid number of max connections\n";
+        LOG_ERROR << "invalid number of max connections\n";
         fail = true;
       }
       break;

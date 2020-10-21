@@ -1,13 +1,19 @@
 #pragma once
 
-#include <unordered_map>
+#include <string>
 #include <vector>
 
-enum CommandType { Set, ListUsers, CloseConnection, Unknown };
+class Command {
+public:
+  Command(std::string message);
 
-struct Command {
-  CommandType type;
+  static bool is_command(std::string message);
+
+  std::string type;
   std::vector<std::string> args;
-};
 
-extern std::unordered_map<std::string, CommandType> commands_map;
+private:
+  std::vector<std::string> split_message_parts();
+
+  std::string message;
+};
