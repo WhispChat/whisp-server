@@ -9,6 +9,7 @@ RegisteredUser::RegisteredUser(std::string new_username, std::string new_email,
   userID = 0;
   username = new_username;
   email = new_email;
+  // TODO: Obviously not final, password auth/encryption is considered for later
   hashed_password = "hashed_" + new_password;
 }
 

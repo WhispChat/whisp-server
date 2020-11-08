@@ -8,6 +8,7 @@
 #include <google/protobuf/any.pb.h>
 #include <google/protobuf/repeated_field.h>
 #include <iostream>
+#include <regex>
 #include <string.h>
 #include <string>
 #include <strings.h>
@@ -18,6 +19,10 @@
 #include <sstream>
 #include <sys/socket.h>
 #include <thread>
+
+// Standardized regular expression checking for valid e-mail address
+const std::regex email_regex("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,4}$",
+                             std::regex_constants::icase);
 
 void TCPSocketServer::initialize() {
   serv_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -173,6 +178,8 @@ void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
   }
 }
 
+// TODO: Given the method's size, this may have to be refactored into its own
+// class
 bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
   std::vector<std::string> args = cmd.args;
   std::string type = cmd.type;
@@ -218,6 +225,13 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
     std::string email = args.at(1);
     std::string password = args.at(2);
 
+    if (!std::regex_match(email, email_regex)) {
+      std::string error_msg =
+          "The e-mail address provided does not appear to be valid";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      return false;
+    }
+    
     RegisteredUser *new_user = new RegisteredUser(username, email, password);
     registered_users.insert(new_user);
 
