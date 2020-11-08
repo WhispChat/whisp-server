@@ -231,7 +231,16 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
       send_message(create_message(server::Message::ERROR, error_msg), *conn);
       return false;
     }
-    
+
+    // TODO: More robust password validation, such as minimum amount of letters,
+    // numbers, symbols...
+    if (password.length() < 8) {
+      std::string error_msg =
+          "Passwords should be minimally eight characters long";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      return false;
+    }
+
     RegisteredUser *new_user = new RegisteredUser(username, email, password);
     registered_users.insert(new_user);
 
