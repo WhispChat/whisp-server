@@ -21,8 +21,9 @@
 #include <thread>
 
 // Standardized regular expression checking for valid e-mail address
-const std::regex email_regex("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,4}$",
-                             std::regex_constants::icase);
+const std::regex
+    email_regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,4}$",
+                std::regex_constants::icase);
 
 void TCPSocketServer::initialize() {
   serv_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -69,7 +70,8 @@ void TCPSocketServer::serve() {
     // Currently, new connections will default to guest users - an
     // authentication flow for registered users should be added alongside GUI
     // TODO: Better user id assignment
-    GuestUser user("guest" + std::to_string(connections.size()));
+    GuestUser *user =
+        new GuestUser("user" + std::to_string(connections.size()));
     Connection *new_conn =
         new Connection(user, client_addr, client_len, client_fd);
 
@@ -88,12 +90,12 @@ void TCPSocketServer::serve() {
     // Broadcast a message to all existing connections to inform about the
     // new connection
     std::string user_joined_message =
-        user.username + " has joined the channel.";
+        user->username + " has joined the channel.";
     broadcast(create_message(server::Message::INFO, user_joined_message));
 
     // Send a welcome message to the new connection
     std::string welcome_message =
-        "Welcome to the channel, " + user.username + "!";
+        "Welcome to the channel, " + user->username + "!";
     send_message(create_message(server::Message::INFO, welcome_message),
                  *new_conn);
 
@@ -141,11 +143,16 @@ void TCPSocketServer::handle_connection(Connection *conn) {
         break;
       }
     } else {
-      user_msg.set_username(conn->user.username);
+      conn->user->set_message_data(user_msg);
+
+      std::string username = conn->user->username;
+      if (user_msg.has_guest_user()) {
+        username += " (guest)";
+      }
+
+      LOG_DEBUG << username << ": " << user_msg.content() << '\n';
 
       broadcast(user_msg);
-
-      LOG_DEBUG << user_msg.username() << ": " << user_msg.content() << '\n';
     }
 
     memset(buffer, 0, sizeof buffer);
@@ -201,7 +208,7 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
     for (auto user : registered_users) {
       if (user->username == username) {
         RegisteredUser *found_user = user;
-        conn->set_user(*found_user);
+        conn->set_user(found_user);
         std::string login_message =
             "You are now logged in as " + found_user->username;
         send_message(create_message(server::Message::INFO, login_message),
@@ -244,7 +251,7 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
     RegisteredUser *new_user = new RegisteredUser(username, email, password);
     registered_users.insert(new_user);
 
-    conn->set_user(*new_user);
+    conn->set_user(new_user);
     std::string registration_message =
         "You have created, and are now logged in as " + new_user->username;
     send_message(create_message(server::Message::INFO, registration_message),
@@ -267,11 +274,11 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
                    [](unsigned char c) { return std::tolower(c); });
 
     if (set_variable.compare("username") == 0) {
-      std::string old_username = conn->user.username;
-      conn->user.set_username(set_value);
+      std::string old_username = conn->user->username;
+      conn->user->set_username(set_value);
       std::string username_message = old_username +
                                      " changed their username to " +
-                                     conn->user.username + ".";
+                                     conn->user->username + ".";
 
       LOG_DEBUG << username_message << '\n';
       broadcast(create_message(server::Message::INFO, username_message));
@@ -306,7 +313,7 @@ std::string TCPSocketServer::get_users_list() {
   std::string user_list_message;
 
   for (auto conn : connections) {
-    user_list_message += conn->user.username + ", ";
+    user_list_message += conn->user->username + ", ";
   }
   return user_list_message.substr(0, user_list_message.size() - 2);
 }
