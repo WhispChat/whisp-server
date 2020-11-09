@@ -306,6 +306,7 @@ void TCPSocketServer::close_connection(Connection *conn) {
 
   close(conn->fd);
   connections.erase(conn);
+  delete conn->user;
   delete conn;
 }
 
