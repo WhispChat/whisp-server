@@ -119,9 +119,30 @@ void TCPSocketServer::serve() {
 }
 
 void TCPSocketServer::cleanup() {
-  for (auto conn : connections) {
-    close_connection(conn);
+  server::ServerClosed closed_msg;
+
+  // NOTE: can't use close_connection function in loop as we need the iterator
+  // returned from erase.
+  auto itr = connections.begin();
+  while (itr != connections.end()) {
+    Connection *conn = *itr;
+
+    if (!conn) {
+      continue;
+    }
+
+    LOG_INFO << "Connection " << *conn << " disconnected" << '\n';
+
+    send_message(closed_msg, *conn);
+
+    close(conn->fd);
+
+    itr = connections.erase(itr);
+
+    delete conn->user;
+    delete conn;
   }
+
   close(serv_fd);
 }
 
