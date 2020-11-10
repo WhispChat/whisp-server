@@ -109,6 +109,7 @@ int main(int argc, char **argv) {
     LOG_ERROR << msg << '\n';
   }
 
+  ss->cleanup();
   delete ss;
 
   return EXIT_SUCCESS;
