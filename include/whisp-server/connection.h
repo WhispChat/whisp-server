@@ -1,28 +1,29 @@
 #pragma once
 
+#include "whisp-server/user.h"
+
 #include <arpa/inet.h>
 #include <iostream>
 #include <string>
 
 class Connection {
 public:
-  Connection(std::string username, struct sockaddr_in addr, socklen_t addr_len,
-             int fd)
-      : username(username), addr(addr), addr_len(addr_len), fd(fd) {}
+  Connection(User *user, struct sockaddr_in addr, socklen_t addr_len, int fd)
+      : user(user), addr(addr), addr_len(addr_len), fd(fd) {}
 
-  void set_username(std::string username);
+  void set_user(User *new_user);
 
   bool operator==(const Connection &c) const { return this->fd == c.fd; }
   friend std::ostream &operator<<(std::ostream &os, const Connection &c) {
-    os << "<" << c.username << " " << inet_ntoa(c.addr.sin_addr) << ":"
+    os << "<" << c.user->username << " " << inet_ntoa(c.addr.sin_addr) << ":"
        << c.addr.sin_port << ">";
     return os;
   }
 
-  std::string username;
-  int fd;
+  User *user;
   struct sockaddr_in addr;
   socklen_t addr_len;
+  int fd;
 };
 
 class ConnectionHash {

@@ -2,11 +2,13 @@
 #include "whisp-server/connection.h"
 #include "whisp-server/encryption.h"
 #include "whisp-server/logging.h"
+#include "whisp-server/user.h"
 
 #include <algorithm>
 #include <google/protobuf/any.pb.h>
 #include <google/protobuf/repeated_field.h>
 #include <iostream>
+#include <regex>
 #include <string.h>
 #include <string>
 #include <strings.h>
@@ -17,6 +19,11 @@
 #include <sstream>
 #include <sys/socket.h>
 #include <thread>
+
+// Standardized regular expression checking for valid e-mail address
+const std::regex
+    email_regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,4}$",
+                std::regex_constants::icase);
 
 void TCPSocketServer::initialize() {
   serv_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -60,9 +67,13 @@ void TCPSocketServer::serve() {
       continue;
     }
 
-    std::string username = "user" + std::to_string(connections.size());
+    // Currently, new connections will default to guest users - an
+    // authentication flow for registered users should be added alongside GUI
+    // TODO: Better user id assignment
+    GuestUser *user =
+        new GuestUser("user" + std::to_string(connections.size()));
     Connection *new_conn =
-        new Connection(username, client_addr, client_len, client_fd);
+        new Connection(user, client_addr, client_len, client_fd);
 
     // Always send server status to new client even when max connections is
     // reached so client knows the server is full
@@ -78,11 +89,13 @@ void TCPSocketServer::serve() {
 
     // Broadcast a message to all existing connections to inform about the
     // new connection
-    std::string user_joined_message = username + " has joined the channel.";
+    std::string user_joined_message =
+        user->username + " has joined the channel.";
     broadcast(create_message(server::Message::INFO, user_joined_message));
 
     // Send a welcome message to the new connection
-    std::string welcome_message = "Welcome to the channel, " + username + "!";
+    std::string welcome_message =
+        "Welcome to the channel, " + user->username + "!";
     send_message(create_message(server::Message::INFO, welcome_message),
                  *new_conn);
 
@@ -130,11 +143,16 @@ void TCPSocketServer::handle_connection(Connection *conn) {
         break;
       }
     } else {
-      user_msg.set_username(conn->username);
+      conn->user->set_message_data(user_msg);
+
+      std::string username = conn->user->username;
+      if (user_msg.has_guest_user()) {
+        username += " (guest)";
+      }
+
+      LOG_DEBUG << username << ": " << user_msg.content() << '\n';
 
       broadcast(user_msg);
-
-      LOG_DEBUG << user_msg.username() << ": " << user_msg.content() << '\n';
     }
 
     memset(buffer, 0, sizeof buffer);
@@ -167,16 +185,82 @@ void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
   }
 }
 
+// TODO: Given the method's size, this may have to be refactored into its own
+// class
 bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
   std::vector<std::string> args = cmd.args;
   std::string type = cmd.type;
 
   if (type.compare("quit") == 0) {
     return true;
+  } else if (type.compare("login") == 0) {
+    if (args.size() != 2) {
+      std::string error_msg = "Incorrect amount of arguments for set - "
+                              "expected 2 (username, password).";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      return false;
+    }
+
+    std::string username = args.at(0);
+    // TODO: Password is not considered for now
+    std::string password = args.at(1);
+
+    for (auto user : registered_users) {
+      if (user->username == username) {
+        RegisteredUser *found_user = user;
+        conn->set_user(found_user);
+        std::string login_message =
+            "You are now logged in as " + found_user->username;
+        send_message(create_message(server::Message::INFO, login_message),
+                     *conn);
+        LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
+        return false;
+      }
+    }
+
+    std::string error_msg = "Unable to login as " + username;
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+  } else if (type.compare("register") == 0) {
+    if (args.size() != 3) {
+      std::string error_msg = "Incorrect amount of arguments for set - "
+                              "expected 3 (username, email, password).";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      return false;
+    }
+
+    std::string username = args.at(0);
+    std::string email = args.at(1);
+    std::string password = args.at(2);
+
+    if (!std::regex_match(email, email_regex)) {
+      std::string error_msg =
+          "The e-mail address provided does not appear to be valid";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      return false;
+    }
+
+    // TODO: More robust password validation, such as minimum amount of letters,
+    // numbers, symbols...
+    if (password.length() < 8) {
+      std::string error_msg =
+          "Passwords should be minimally eight characters long";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      return false;
+    }
+
+    RegisteredUser *new_user = new RegisteredUser(username, email, password);
+    registered_users.insert(new_user);
+
+    conn->set_user(new_user);
+    std::string registration_message =
+        "You have created, and are now logged in as " + new_user->username;
+    send_message(create_message(server::Message::INFO, registration_message),
+                 *conn);
+    LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
   } else if (type.compare("set") == 0) {
     if (args.size() != 2) {
-      std::string error_msg =
-          "Incorrect amount of arguments for set - expected 2.";
+      std::string error_msg = "Incorrect amount of arguments for set - "
+                              "expected 2 (key, value).";
       send_message(create_message(server::Message::ERROR, error_msg), *conn);
       return false;
     }
@@ -190,10 +274,11 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
                    [](unsigned char c) { return std::tolower(c); });
 
     if (set_variable.compare("username") == 0) {
-      std::string old_username = conn->username;
-      conn->set_username(set_value);
-      std::string username_message =
-          old_username + " changed their username to " + conn->username + ".";
+      std::string old_username = conn->user->username;
+      conn->user->set_username(set_value);
+      std::string username_message = old_username +
+                                     " changed their username to " +
+                                     conn->user->username + ".";
 
       LOG_DEBUG << username_message << '\n';
       broadcast(create_message(server::Message::INFO, username_message));
@@ -221,6 +306,7 @@ void TCPSocketServer::close_connection(Connection *conn) {
 
   close(conn->fd);
   connections.erase(conn);
+  delete conn->user;
   delete conn;
 }
 
@@ -228,7 +314,7 @@ std::string TCPSocketServer::get_users_list() {
   std::string user_list_message;
 
   for (auto conn : connections) {
-    user_list_message += conn->username + ", ";
+    user_list_message += conn->user->username + ", ";
   }
   return user_list_message.substr(0, user_list_message.size() - 2);
 }

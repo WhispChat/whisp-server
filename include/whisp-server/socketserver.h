@@ -34,4 +34,6 @@ private:
   struct sockaddr_in serv_addr;
 
   std::unordered_set<Connection *, ConnectionHash> connections;
+  // TODO: Temporary in-memory set of users until DB is created
+  std::unordered_set<RegisteredUser *> registered_users;
 };
