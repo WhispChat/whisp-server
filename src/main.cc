@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
       {"port", required_argument, nullptr, 'p'},
       {"host", required_argument, nullptr, 'H'},
       {"max-connections", required_argument, nullptr, 'm'},
-      {"s", required_argument, nullptr, 's'},
+      {"sqlite-path", required_argument, nullptr, 's'},
       {nullptr, 0, nullptr, 0},
   };
   int c;
