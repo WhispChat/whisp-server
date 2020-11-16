@@ -48,12 +48,17 @@ void TCPSocketServer::initialize() {
   if (listen(serv_fd, max_conn) == -1) {
     throw "listen failed";
   }
+
+  if (sqlite3_open(sqlite_path.c_str(), &db)) {
+    throw "Can't open database: " + std::string(sqlite3_errmsg(db));
+  }
 }
 
 void TCPSocketServer::serve() {
   LOG_INFO << "Listening on " << host << ":" << port << '\n';
   LOG_DEBUG << "Max connections: " << max_conn << '\n';
   LOG_DEBUG << "Server file descriptor: " << serv_fd << '\n';
+  LOG_DEBUG << "SQLite3 database file location: " << sqlite_path << '\n';
 
   while (1) {
     int client_fd = -1;
@@ -131,11 +136,10 @@ void TCPSocketServer::cleanup() {
       continue;
     }
 
-    LOG_INFO << "Connection " << *conn << " disconnected" << '\n';
-
     send_message(closed_msg, *conn);
-
     close(conn->fd);
+
+    LOG_INFO << "Connection " << *conn << " closed" << '\n';
 
     itr = connections.erase(itr);
 
@@ -144,6 +148,7 @@ void TCPSocketServer::cleanup() {
   }
 
   close(serv_fd);
+  sqlite3_close(db);
 }
 
 void TCPSocketServer::handle_connection(Connection *conn) {
@@ -226,20 +231,21 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
     // TODO: Password is not considered for now
     std::string password = args.at(1);
 
-    for (auto user : registered_users) {
-      if (user->username == username) {
-        RegisteredUser *found_user = user;
-        conn->set_user(found_user);
-        std::string login_message =
-            "You are now logged in as " + found_user->username;
-        send_message(create_message(server::Message::INFO, login_message),
-                     *conn);
-        LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
-        return false;
-      }
-    }
+    // TODO: find user in db
+    // for (auto user : registered_users) {
+    //   if (user->username == username) {
+    //     RegisteredUser *found_user = user;
+    //     conn->set_user(found_user);
+    //     std::string login_message =
+    //         "You are now logged in as " + found_user->username;
+    //     send_message(create_message(server::Message::INFO, login_message),
+    //                  *conn);
+    //     LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
+    //     return false;
+    //   }
+    // }
 
-    std::string error_msg = "Unable to login as " + username;
+    std::string error_msg = "Bad login.";
     send_message(create_message(server::Message::ERROR, error_msg), *conn);
   } else if (type.compare("register") == 0) {
     if (args.size() != 3) {
@@ -269,14 +275,15 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
       return false;
     }
 
-    RegisteredUser *new_user = new RegisteredUser(username, email, password);
-    registered_users.insert(new_user);
+    // TODO: add user to db
+    // RegisteredUser *new_user = new RegisteredUser(username, email, password);
+    // registered_users.insert(new_user);
 
-    conn->set_user(new_user);
-    std::string registration_message =
-        "You have created, and are now logged in as " + new_user->username;
-    send_message(create_message(server::Message::INFO, registration_message),
-                 *conn);
+    // conn->set_user(new_user);
+    // std::string registration_message =
+    //     "You have created, and are now logged in as " + new_user->username;
+    // send_message(create_message(server::Message::INFO, registration_message),
+    //              *conn);
     LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
   } else if (type.compare("set") == 0) {
     if (args.size() != 2) {

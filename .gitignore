@@ -34,3 +34,6 @@ install_manifest.txt
 
 # CMake build
 build
+
+# SQLite3
+*.db

@@ -6,9 +6,11 @@
 #include "whisp-server/logging.h"
 #include "whisp-server/socketserver.h"
 
-int DEFAULT_PORT = 8080;
-std::string DEFAULT_HOST = "0.0.0.0";
-std::size_t DEFAULT_MAX_CONN = 50;
+const int DEFAULT_PORT = 8080;
+const std::string DEFAULT_HOST = "0.0.0.0";
+const std::string DEFAULT_SQLITE_PATH = "../whisp.db";
+const std::size_t DEFAULT_MAX_CONN = 50;
+
 int debug = 0;
 
 TCPSocketServer *ss = nullptr;
@@ -39,13 +41,18 @@ void help(char **argv) {
                "  -m, --max-connections=MAX_CONN\n"
                "                          set maximum amount of connections "
                "allowed (default: "
-            << DEFAULT_MAX_CONN << ")\n";
+            << DEFAULT_MAX_CONN << ")\n"
+                                   "  -s, --sqlite-path=DATABASE_FILE\n"
+                                   "                          set sqlite "
+                                   "database path (default: "
+            << DEFAULT_SQLITE_PATH << ")\n";
 }
 
 int main(int argc, char **argv) {
   int port = DEFAULT_PORT;
   std::size_t max_conn = DEFAULT_MAX_CONN;
   std::string host = DEFAULT_HOST;
+  std::string sqlite_path = DEFAULT_SQLITE_PATH;
 
   const struct option long_options[] = {
       {"debug", no_argument, nullptr, 'd'},
@@ -53,12 +60,13 @@ int main(int argc, char **argv) {
       {"port", required_argument, nullptr, 'p'},
       {"host", required_argument, nullptr, 'H'},
       {"max-connections", required_argument, nullptr, 'm'},
+      {"s", required_argument, nullptr, 's'},
       {nullptr, 0, nullptr, 0},
   };
   int c;
   bool fail = false;
 
-  while ((c = getopt_long(argc, argv, "dvhp:H:m:", long_options, nullptr)) !=
+  while ((c = getopt_long(argc, argv, "dvhp:H:m:s:", long_options, nullptr)) !=
          -1) {
     switch (c) {
     case 'd':
@@ -84,6 +92,9 @@ int main(int argc, char **argv) {
         fail = true;
       }
       break;
+    case 's':
+      sqlite_path = std::string(optarg);
+      break;
     }
   }
 
@@ -91,7 +102,7 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  ss = new TCPSocketServer(host, port, max_conn);
+  ss = new TCPSocketServer(host, port, max_conn, sqlite_path);
 
   // handle Ctrl+C
   struct sigaction sigint;
