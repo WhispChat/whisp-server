@@ -3,6 +3,7 @@
 #include <iostream>
 #include <string>
 
+#include "whisp-server/db.h"
 #include "whisp-server/logging.h"
 #include "whisp-server/socketserver.h"
 
@@ -102,7 +103,7 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  ss = new TCPSocketServer(host, port, max_conn, sqlite_path);
+  ss = new TCPSocketServer(host, port, max_conn);
 
   // handle Ctrl+C
   struct sigaction sigint;
@@ -114,6 +115,7 @@ int main(int argc, char **argv) {
   sigaction(SIGINT, &sigint, NULL);
 
   try {
+    db::init_database(sqlite_path);
     ss->initialize();
     ss->serve();
   } catch (char const *msg) {

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <sqlite3.h>
 #include <string>
 #include <unordered_set>
 
@@ -11,9 +10,8 @@
 
 class TCPSocketServer {
 public:
-  TCPSocketServer(const std::string &host, int port, std::size_t max_conn,
-                  const std::string &sqlite_path)
-      : host(host), port(port), max_conn(max_conn), sqlite_path(sqlite_path) {}
+  TCPSocketServer(const std::string &host, int port, std::size_t max_conn)
+      : host(host), port(port), max_conn(max_conn) {}
   void initialize();
   void serve();
   void cleanup();
@@ -35,9 +33,6 @@ private:
 
   int serv_fd;
   struct sockaddr_in serv_addr;
-
-  const std::string &sqlite_path;
-  sqlite3 *db;
 
   std::unordered_set<Connection *, ConnectionHash> connections;
 };

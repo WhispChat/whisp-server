@@ -1,5 +1,6 @@
 #include "whisp-server/socketserver.h"
 #include "whisp-server/connection.h"
+#include "whisp-server/db.h"
 #include "whisp-server/encryption.h"
 #include "whisp-server/logging.h"
 #include "whisp-server/user.h"
@@ -48,17 +49,12 @@ void TCPSocketServer::initialize() {
   if (listen(serv_fd, max_conn) == -1) {
     throw "listen failed";
   }
-
-  if (sqlite3_open(sqlite_path.c_str(), &db)) {
-    throw "Can't open database: " + std::string(sqlite3_errmsg(db));
-  }
 }
 
 void TCPSocketServer::serve() {
   LOG_INFO << "Listening on " << host << ":" << port << '\n';
   LOG_DEBUG << "Max connections: " << max_conn << '\n';
   LOG_DEBUG << "Server file descriptor: " << serv_fd << '\n';
-  LOG_DEBUG << "SQLite3 database file location: " << sqlite_path << '\n';
 
   while (1) {
     int client_fd = -1;
@@ -148,7 +144,7 @@ void TCPSocketServer::cleanup() {
   }
 
   close(serv_fd);
-  sqlite3_close(db);
+  db::close_database();
 }
 
 void TCPSocketServer::handle_connection(Connection *conn) {
@@ -228,25 +224,24 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
     }
 
     std::string username = args.at(0);
-    // TODO: Password is not considered for now
     std::string password = args.at(1);
 
-    // TODO: find user in db
-    // for (auto user : registered_users) {
-    //   if (user->username == username) {
-    //     RegisteredUser *found_user = user;
-    //     conn->set_user(found_user);
-    //     std::string login_message =
-    //         "You are now logged in as " + found_user->username;
-    //     send_message(create_message(server::Message::INFO, login_message),
-    //                  *conn);
-    //     LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
-    //     return false;
-    //   }
-    // }
+    RegisteredUser *found_user = db::user::get(username);
+    // TODO: check password hash
+    if (!found_user || !found_user->check_password(password)) {
+      send_message(create_message(server::Message::ERROR, "Incorrect login."),
+                   *conn);
+      return false;
+    }
 
-    std::string error_msg = "Bad login.";
-    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    conn->set_user(found_user);
+    std::string login_message =
+        "You are now logged in as " + found_user->username;
+    send_message(create_message(server::Message::INFO, login_message), *conn);
+
+    LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
+
+    return false;
   } else if (type.compare("register") == 0) {
     if (args.size() != 3) {
       std::string error_msg = "Incorrect amount of arguments for set - "
@@ -266,7 +261,8 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
       return false;
     }
 
-    // TODO: More robust password validation, such as minimum amount of letters,
+    // TODO: More robust password validation, such as minimum amount of
+    // letters,
     // numbers, symbols...
     if (password.length() < 8) {
       std::string error_msg =
@@ -275,16 +271,20 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
       return false;
     }
 
-    // TODO: add user to db
-    // RegisteredUser *new_user = new RegisteredUser(username, email, password);
-    // registered_users.insert(new_user);
-
-    // conn->set_user(new_user);
-    // std::string registration_message =
-    //     "You have created, and are now logged in as " + new_user->username;
-    // send_message(create_message(server::Message::INFO, registration_message),
-    //              *conn);
-    LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
+    // TODO: hash password
+    RegisteredUser *new_user = db::user::add(username, email, password);
+    if (new_user) {
+      conn->set_user(new_user);
+      std::string registration_message =
+          "You have been registered, and are now logged in as " +
+          new_user->username;
+      send_message(create_message(server::Message::INFO, registration_message),
+                   *conn);
+      LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
+    } else {
+      // SQLite error
+      LOG_ERROR << "Failed to register user\n";
+    }
   } else if (type.compare("set") == 0) {
     if (args.size() != 2) {
       std::string error_msg = "Incorrect amount of arguments for set - "

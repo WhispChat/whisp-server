@@ -16,6 +16,11 @@ void RegisteredUser::set_message_data(client::Message &user_msg) {
   user_msg.set_allocated_registered_user(ru);
 }
 
+bool RegisteredUser::check_password(std::string password) {
+  // TODO: compare actual hash
+  return hashed_password.compare("hashed_" + password) == 0;
+}
+
 GuestUser::GuestUser(std::string new_username) {
   userID = 0;
   username = new_username;

@@ -20,6 +20,7 @@ public:
   RegisteredUser(std::string new_username, std::string new_email,
                  std::string new_password);
   void set_message_data(client::Message &user_msg) override;
+  bool check_password(std::string password);
 
   std::string email;
 

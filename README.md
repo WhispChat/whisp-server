@@ -3,7 +3,7 @@ This repository contains the code for the chat server for the Whisp chat
 platform.
 
 ## Prerequisites
-- CMake >=3.13
+- CMake >=3.12
 - Make
 - C++17 compiler
 - [Google Protocol Buffers](https://developers.google.com/protocol-buffers) >=3.13.0
