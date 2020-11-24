@@ -4,7 +4,8 @@ namespace db {
 sqlite3 *conn;
 
 void init_database(std::string sqlite_path) {
-  if (sqlite3_open(sqlite_path.c_str(), &conn)) {
+  if (sqlite3_open_v2(sqlite_path.c_str(), &conn, SQLITE_OPEN_READWRITE,
+                      nullptr)) {
     throw "Can't open database: " + std::string(sqlite3_errmsg(conn));
   }
 }
