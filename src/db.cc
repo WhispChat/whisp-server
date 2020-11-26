@@ -1,4 +1,5 @@
 #include "whisp-server/db.h"
+#include "whisp-server/logging.h"
 
 namespace db {
 sqlite3 *conn;
@@ -29,13 +30,17 @@ RegisteredUser *user::add(std::string username, std::string email,
   sqlite3_bind_text(st, 3, password.c_str(), password.length(),
                     SQLITE_TRANSIENT);
 
-  // TODO: check if username exists before inserting
   int rc = sqlite3_step(st);
   sqlite3_finalize(st);
+
+  if (rc == SQLITE_CONSTRAINT) {
+    throw "Username already exists.";
+  }
 
   if (rc == SQLITE_DONE) {
     return new RegisteredUser(username, email, password);
   } else {
+    LOG_ERROR << "Failed to register user: SQLite error " << rc << '\n';
     return nullptr;
   }
 }
@@ -48,7 +53,8 @@ RegisteredUser *user::get(std::string username) {
   sqlite3_bind_text(st, 1, username.c_str(), username.length(),
                     SQLITE_TRANSIENT);
 
-  if (sqlite3_step(st) == SQLITE_ROW) {
+  int rc = sqlite3_step(st);
+  if (rc == SQLITE_ROW) {
     std::string username = std::string((char *)sqlite3_column_text(st, 1));
     std::string email = std::string((char *)sqlite3_column_text(st, 2));
     std::string password = std::string((char *)sqlite3_column_text(st, 3));
@@ -57,6 +63,7 @@ RegisteredUser *user::get(std::string username) {
     return new RegisteredUser(username, email, password);
   } else {
     sqlite3_finalize(st);
+    LOG_ERROR << "Failed to register user: SQLite error " << rc << '\n';
     return nullptr;
   }
 }

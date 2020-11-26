@@ -262,8 +262,7 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
     }
 
     // TODO: More robust password validation, such as minimum amount of
-    // letters,
-    // numbers, symbols...
+    // letters, numbers, symbols...
     if (password.length() < 8) {
       std::string error_msg =
           "Passwords should be minimally eight characters long";
@@ -271,19 +270,27 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
       return false;
     }
 
-    // TODO: hash password
-    RegisteredUser *new_user = db::user::add(username, email, password);
-    if (new_user) {
-      conn->set_user(new_user);
-      std::string registration_message =
-          "You have been registered, and are now logged in as " +
-          new_user->username;
-      send_message(create_message(server::Message::INFO, registration_message),
-                   *conn);
-      LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
-    } else {
-      // SQLite error
-      LOG_ERROR << "Failed to register user\n";
+    try {
+      RegisteredUser *new_user = db::user::add(username, email, password);
+
+      if (new_user) {
+        conn->set_user(new_user);
+        std::string registration_message =
+            "You have been registered, and are now logged in as " +
+            new_user->username;
+        send_message(
+            create_message(server::Message::INFO, registration_message), *conn);
+        LOG_INFO << "Connection " << *conn << " has changed auth\n";
+      } else {
+        // SQLite error, inform user
+        std::string error_msg = "Registration process failed, please "
+                                "check with server administrator(s).";
+        send_message(create_message(server::Message::ERROR, error_msg), *conn);
+        return false;
+      }
+    } catch (char const *error_msg) {
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      return false;
     }
   } else if (type.compare("set") == 0) {
     if (args.size() != 2) {
@@ -319,10 +326,8 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
         "Users in this channel: " + get_users_list() + ".";
     send_message(create_message(server::Message::INFO, user_list_message),
                  *conn);
-
   } else {
     std::string error_msg = "Unknown command";
-
     send_message(create_message(server::Message::ERROR, error_msg), *conn);
   }
 
