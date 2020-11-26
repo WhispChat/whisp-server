@@ -16,6 +16,8 @@ void RegisteredUser::set_message_data(client::Message &user_msg) {
   user_msg.set_allocated_registered_user(ru);
 }
 
+std::string RegisteredUser::display_name() { return username; }
+
 bool RegisteredUser::check_password(std::string password) {
   // TODO: compare actual hash
   return hashed_password.compare("hashed_" + password) == 0;
@@ -31,3 +33,5 @@ void GuestUser::set_message_data(client::Message &user_msg) {
   gu->set_username(username);
   user_msg.set_allocated_guest_user(gu);
 }
+
+std::string GuestUser::display_name() { return username + " (guest)"; }

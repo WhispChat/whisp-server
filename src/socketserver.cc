@@ -167,20 +167,14 @@ void TCPSocketServer::handle_connection(Connection *conn) {
     } else {
       conn->user->set_message_data(user_msg);
 
-      std::string username = conn->user->username;
-      if (user_msg.has_guest_user()) {
-        username += " (guest)";
-      }
-
-      LOG_DEBUG << username << ": " << user_msg.content() << '\n';
+      LOG_DEBUG << conn->user->display_name() << ": " << user_msg.content()
+                << '\n';
 
       broadcast(user_msg);
     }
 
     memset(buffer, 0, sizeof buffer);
   }
-
-  close_connection(conn);
 }
 
 void TCPSocketServer::send_message(const google::protobuf::Message &msg,
@@ -207,133 +201,6 @@ void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
   }
 }
 
-// TODO: Given the method's size, this may have to be refactored into its own
-// class
-bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
-  std::vector<std::string> args = cmd.args;
-  std::string type = cmd.type;
-
-  if (type.compare("quit") == 0) {
-    return true;
-  } else if (type.compare("login") == 0) {
-    if (args.size() != 2) {
-      std::string error_msg = "Incorrect amount of arguments for set - "
-                              "expected 2 (username, password).";
-      send_message(create_message(server::Message::ERROR, error_msg), *conn);
-      return false;
-    }
-
-    std::string username = args.at(0);
-    std::string password = args.at(1);
-
-    RegisteredUser *found_user = db::user::get(username);
-    // TODO: check password hash
-    if (!found_user || !found_user->check_password(password)) {
-      send_message(create_message(server::Message::ERROR, "Incorrect login."),
-                   *conn);
-      return false;
-    }
-
-    conn->set_user(found_user);
-    std::string login_message =
-        "You are now logged in as " + found_user->username;
-    send_message(create_message(server::Message::INFO, login_message), *conn);
-
-    LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
-
-    return false;
-  } else if (type.compare("register") == 0) {
-    if (args.size() != 3) {
-      std::string error_msg = "Incorrect amount of arguments for set - "
-                              "expected 3 (username, email, password).";
-      send_message(create_message(server::Message::ERROR, error_msg), *conn);
-      return false;
-    }
-
-    std::string username = args.at(0);
-    std::string email = args.at(1);
-    std::string password = args.at(2);
-
-    if (!std::regex_match(email, email_regex)) {
-      std::string error_msg =
-          "The e-mail address provided does not appear to be valid";
-      send_message(create_message(server::Message::ERROR, error_msg), *conn);
-      return false;
-    }
-
-    // TODO: More robust password validation, such as minimum amount of
-    // letters, numbers, symbols...
-    if (password.length() < 8) {
-      std::string error_msg =
-          "Passwords should be minimally eight characters long";
-      send_message(create_message(server::Message::ERROR, error_msg), *conn);
-      return false;
-    }
-
-    try {
-      RegisteredUser *new_user = db::user::add(username, email, password);
-
-      if (new_user) {
-        conn->set_user(new_user);
-        std::string registration_message =
-            "You have been registered, and are now logged in as " +
-            new_user->username;
-        send_message(
-            create_message(server::Message::INFO, registration_message), *conn);
-        LOG_INFO << "Connection " << *conn << " has changed auth\n";
-      } else {
-        // SQLite error, inform user
-        std::string error_msg = "Registration process failed, please "
-                                "check with server administrator(s).";
-        send_message(create_message(server::Message::ERROR, error_msg), *conn);
-        return false;
-      }
-    } catch (char const *error_msg) {
-      send_message(create_message(server::Message::ERROR, error_msg), *conn);
-      return false;
-    }
-  } else if (type.compare("set") == 0) {
-    if (args.size() != 2) {
-      std::string error_msg = "Incorrect amount of arguments for set - "
-                              "expected 2 (key, value).";
-      send_message(create_message(server::Message::ERROR, error_msg), *conn);
-      return false;
-    }
-
-    std::string set_variable = args.at(0);
-    std::string set_value = args.at(1);
-
-    // make set variable case insensitive
-    std::transform(set_variable.begin(), set_variable.end(),
-                   set_variable.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
-
-    if (set_variable.compare("username") == 0) {
-      std::string old_username = conn->user->username;
-      conn->user->set_username(set_value);
-      std::string username_message = old_username +
-                                     " changed their username to " +
-                                     conn->user->username + ".";
-
-      LOG_DEBUG << username_message << '\n';
-      broadcast(create_message(server::Message::INFO, username_message));
-    } else {
-      std::string error_msg = "Unknown variable \"" + set_variable + "\".";
-      send_message(create_message(server::Message::ERROR, error_msg), *conn);
-    }
-  } else if (type.compare("users") == 0) {
-    std::string user_list_message =
-        "Users in this channel: " + get_users_list() + ".";
-    send_message(create_message(server::Message::INFO, user_list_message),
-                 *conn);
-  } else {
-    std::string error_msg = "Unknown command";
-    send_message(create_message(server::Message::ERROR, error_msg), *conn);
-  }
-
-  return false;
-}
-
 void TCPSocketServer::close_connection(Connection *conn) {
   LOG_INFO << "Connection " << *conn << " disconnected" << '\n';
 
@@ -347,7 +214,7 @@ std::string TCPSocketServer::get_users_list() {
   std::string user_list_message;
 
   for (auto conn : connections) {
-    user_list_message += conn->user->username + ", ";
+    user_list_message += conn->user->display_name() + ", ";
   }
   return user_list_message.substr(0, user_list_message.size() - 2);
 }
@@ -368,4 +235,145 @@ TCPSocketServer::create_message(server::Message::MessageType type,
   msg.set_content(content);
 
   return msg;
+}
+
+bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
+  std::vector<std::string> args = cmd.args;
+  std::string type = cmd.type;
+
+  if (type.compare("quit") == 0) {
+    return true;
+  } else if (type.compare("login") == 0) {
+    return parse_login_command(conn, args);
+  } else if (type.compare("register") == 0) {
+    return parse_register_command(conn, args);
+  } else if (type.compare("set") == 0) {
+    return parse_set_command(conn, args);
+  } else if (type.compare("users") == 0) {
+    std::string user_list_message =
+        "Users in this channel: " + get_users_list() + ".";
+    send_message(create_message(server::Message::INFO, user_list_message),
+                 *conn);
+  } else {
+    std::string error_msg = "Unknown command";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+  }
+
+  return false;
+}
+
+bool TCPSocketServer::parse_login_command(Connection *conn,
+                                          std::vector<std::string> args) {
+  if (args.size() != 2) {
+    std::string error_msg = "Incorrect amount of arguments for set - "
+                            "expected 2 (username, password).";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    return false;
+  }
+
+  std::string username = args.at(0);
+  std::string password = args.at(1);
+
+  RegisteredUser *found_user = db::user::get(username);
+  // TODO: check password hash
+  if (!found_user || !found_user->check_password(password)) {
+    send_message(create_message(server::Message::ERROR, "Incorrect login."),
+                 *conn);
+    return false;
+  }
+
+  conn->set_user(found_user);
+  std::string login_message =
+      "You are now logged in as " + found_user->username;
+  send_message(create_message(server::Message::INFO, login_message), *conn);
+
+  LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
+
+  return false;
+}
+
+bool TCPSocketServer::parse_register_command(Connection *conn,
+                                             std::vector<std::string> args) {
+  if (args.size() != 3) {
+    std::string error_msg = "Incorrect amount of arguments for set - "
+                            "expected 3 (username, email, password).";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    return false;
+  }
+
+  std::string username = args.at(0);
+  std::string email = args.at(1);
+  std::string password = args.at(2);
+
+  if (!std::regex_match(email, email_regex)) {
+    std::string error_msg =
+        "The e-mail address provided does not appear to be valid";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    return false;
+  }
+
+  // TODO: More robust password validation, such as minimum amount of
+  // letters, numbers, symbols...
+  if (password.length() < 8) {
+    std::string error_msg =
+        "Passwords should be minimally eight characters long";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    return false;
+  }
+
+  try {
+    RegisteredUser *new_user = db::user::add(username, email, password);
+
+    if (new_user) {
+      conn->set_user(new_user);
+      std::string registration_message =
+          "You have been registered, and are now logged in as " +
+          new_user->username;
+      send_message(create_message(server::Message::INFO, registration_message),
+                   *conn);
+      LOG_INFO << "Connection " << *conn << " has changed auth\n";
+    } else {
+      // SQLite error, inform user
+      std::string error_msg = "Registration process failed, please "
+                              "check with server administrator(s).";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    }
+  } catch (char const *error_msg) {
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+  }
+
+  return false;
+}
+
+bool TCPSocketServer::parse_set_command(Connection *conn,
+                                        std::vector<std::string> args) {
+  if (args.size() != 2) {
+    std::string error_msg = "Incorrect amount of arguments for set - "
+                            "expected 2 (key, value).";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    return false;
+  }
+
+  std::string set_variable = args.at(0);
+  std::string set_value = args.at(1);
+
+  // make set variable case insensitive
+  std::transform(set_variable.begin(), set_variable.end(), set_variable.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+
+  if (set_variable.compare("username") == 0) {
+    std::string old_username = conn->user->username;
+    conn->user->set_username(set_value);
+    std::string username_message = old_username +
+                                   " changed their username to " +
+                                   conn->user->username + ".";
+
+    LOG_DEBUG << username_message << '\n';
+    broadcast(create_message(server::Message::INFO, username_message));
+  } else {
+    std::string error_msg = "Unknown variable \"" + set_variable + "\".";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+  }
+
+  return false;
 }
