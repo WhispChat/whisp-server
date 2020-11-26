@@ -63,7 +63,7 @@ RegisteredUser *user::get(std::string username) {
     return new RegisteredUser(username, email, password);
   } else {
     sqlite3_finalize(st);
-    LOG_ERROR << "Failed to register user: SQLite error " << rc << '\n';
+    LOG_ERROR << "Failed to get user: SQLite error " << rc << '\n';
     return nullptr;
   }
 }
