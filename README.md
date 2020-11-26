@@ -7,7 +7,7 @@ platform.
 - Make
 - C++17 compiler
 - [Google Protocol Buffers](https://developers.google.com/protocol-buffers) >=3.13.0
-- libsqlite3 >=3.26
+- libsqlite3-dev >=3.26
 
 ## Installation
 1. Clone repository:
