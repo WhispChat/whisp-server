@@ -15,6 +15,8 @@ include_directories(${PROTOBUF_INCLUDE_DIR})
 find_package(SQLite3)
 include_directories(${SQLITE3_INCLUDE_DIRS})
 
+find_package(OpenSSL REQUIRED)
+
 add_library(whisp_lib ${SRC_LIST} ${HEADER_LIST})
 target_include_directories(whisp_lib PUBLIC ../include)
 
@@ -22,4 +24,4 @@ add_executable(whisp-server main.cc)
 target_compile_features(whisp-server PRIVATE cxx_std_17)
 
 target_link_libraries(whisp-server
-  PRIVATE whisp_lib Threads::Threads ${PROTOBUF_LIBRARY} sqlite3)
+  PRIVATE whisp_lib Threads::Threads ${PROTOBUF_LIBRARY} sqlite3 OpenSSL::SSL)

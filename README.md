@@ -8,6 +8,7 @@ platform.
 - C++17 compiler
 - [Google Protocol Buffers](https://developers.google.com/protocol-buffers) >=3.13.0
 - libsqlite3-dev >=3.26
+- OpenSSL (libssl-dev) >=1.1
 
 ## Installation
 1. Clone repository:
@@ -38,3 +39,16 @@ sqlite3 whisp.db < sql/whisp.sql
 ```
 Make sure when you run the server binary that the SQLite3 path is set correctly
 (see note above).
+
+## OpenSSL setup
+To generate the public key, private key, and certificate required to run the
+Whisp server using SSL, run the following commands in the `ssl/` folder:
+```bash
+openssl ecparam -genkey -name prime256v1 -noout -out private_key.pem
+openssl ec -in private_key.pem -pubout -out public_key.pem
+```
+This will generate a keypair using the P-256 elliptic curve algorithm. To create
+the required certificate, run the following command:
+```bash
+openssl req -new -x509 -sha256 -key private_key.pem -out cert.pem
+```
