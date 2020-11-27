@@ -64,6 +64,7 @@ void TCPSocketServer::initialize_ssl_context() {
     throw std::string("Unable to create SSL context");
   }
 
+  SSL_CTX_set_min_proto_version(ssl_ctx, TLS1_2_VERSION);
   SSL_CTX_set_ecdh_auto(ssl_ctx, 1);
 
   if (SSL_CTX_use_certificate_file(ssl_ctx, cert_path.c_str(),
