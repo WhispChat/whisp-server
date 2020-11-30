@@ -1,11 +1,12 @@
 #pragma once
 
+#include <string>
+#include <unordered_set>
+
 #include "whisp-protobuf/cpp/client.pb.h"
 #include "whisp-protobuf/cpp/server.pb.h"
 #include "whisp-server/command.h"
 #include "whisp-server/connection.h"
-#include <string>
-#include <unordered_set>
 
 class TCPSocketServer {
 public:
@@ -19,12 +20,17 @@ private:
   virtual void handle_connection(Connection *conn);
   void send_message(const google::protobuf::Message &msg, Connection conn);
   void broadcast(const google::protobuf::Message &msg);
-  bool parse_command(Connection *conn, Command cmd);
   void close_connection(Connection *conn);
   std::string get_users_list();
+
   server::Status get_server_status();
   server::Message create_message(server::Message::MessageType type,
                                  std::string content);
+
+  bool parse_command(Connection *conn, Command cmd);
+  bool parse_login_command(Connection *conn, std::vector<std::string> args);
+  bool parse_register_command(Connection *conn, std::vector<std::string> args);
+  bool parse_set_command(Connection *conn, std::vector<std::string> args);
 
   const std::string &host;
   int port;
@@ -34,6 +40,4 @@ private:
   struct sockaddr_in serv_addr;
 
   std::unordered_set<Connection *, ConnectionHash> connections;
-  // TODO: Temporary in-memory set of users until DB is created
-  std::unordered_set<RegisteredUser *> registered_users;
 };
