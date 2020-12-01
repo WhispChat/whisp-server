@@ -315,8 +315,7 @@ bool TCPSocketServer::parse_login_command(Connection *conn,
   std::string password = args.at(1);
 
   RegisteredUser *found_user = db::user::get(username);
-  std::string password_hash = hashing::hash_password(password);
-  if (!found_user || !found_user->compare_hash(password_hash)) {
+  if (!found_user || !found_user->compare_hash(password)) {
     send_message(create_message(server::Message::ERROR, "Incorrect login."),
                  *conn);
     return false;
@@ -362,8 +361,10 @@ bool TCPSocketServer::parse_register_command(Connection *conn,
   }
 
   try {
-    std::string password_hash = hashing::hash_password(password);
-    RegisteredUser *new_user = db::user::add(username, email, password_hash);
+    std::string password_salt = hashing::generate_salt();
+    std::string password_hash = hashing::hash_password(password, password_salt);
+    RegisteredUser *new_user =
+        db::user::add(username, email, password_hash, password_salt);
 
     if (new_user) {
       conn->set_user(new_user);

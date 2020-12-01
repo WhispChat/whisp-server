@@ -19,9 +19,11 @@ void close_database() {
 }
 
 RegisteredUser *user::add(std::string username, std::string email,
-                          std::string password_hash) {
+                          std::string password_hash,
+                          std::string password_salt) {
   std::string sql =
-      "INSERT INTO users (id,username,email,password_hash) VALUES (NULL,?,?,?)";
+      "INSERT INTO users (id,username,email,password_hash,password_salt) "
+      "VALUES (NULL,?,?,?,?)";
   sqlite3_stmt *st;
 
   sqlite3_prepare_v2(conn, sql.c_str(), -1, &st, nullptr);
@@ -29,6 +31,8 @@ RegisteredUser *user::add(std::string username, std::string email,
                     SQLITE_TRANSIENT);
   sqlite3_bind_text(st, 2, email.c_str(), email.length(), SQLITE_TRANSIENT);
   sqlite3_bind_text(st, 3, password_hash.c_str(), password_hash.length(),
+                    SQLITE_TRANSIENT);
+  sqlite3_bind_text(st, 4, password_salt.c_str(), password_salt.length(),
                     SQLITE_TRANSIENT);
 
   int rc = sqlite3_step(st);
@@ -39,7 +43,7 @@ RegisteredUser *user::add(std::string username, std::string email,
   }
 
   if (rc == SQLITE_DONE) {
-    return new RegisteredUser(username, email, password_hash);
+    return new RegisteredUser(username, email, password_hash, password_salt);
   } else {
     LOG_ERROR << "Failed to register user: SQLite error " << rc << '\n';
     return nullptr;
@@ -59,9 +63,10 @@ RegisteredUser *user::get(std::string username) {
     std::string username = std::string((char *)sqlite3_column_text(st, 1));
     std::string email = std::string((char *)sqlite3_column_text(st, 2));
     std::string password_hash = std::string((char *)sqlite3_column_text(st, 3));
+    std::string password_salt = std::string((char *)sqlite3_column_text(st, 4));
     sqlite3_finalize(st);
 
-    return new RegisteredUser(username, email, password_hash);
+    return new RegisteredUser(username, email, password_hash, password_salt);
   } else {
     sqlite3_finalize(st);
     LOG_ERROR << "Failed to get user: SQLite error " << rc << '\n';

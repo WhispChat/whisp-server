@@ -19,15 +19,16 @@ protected:
 class RegisteredUser : public User {
 public:
   RegisteredUser(std::string new_username, std::string new_email,
-                 std::string new_password);
+                 std::string new_password_hash, std::string new_password_salt);
   void set_message_data(client::Message &user_msg) override;
   std::string display_name() override;
-  bool compare_hash(std::string given_hash);
+  bool compare_hash(std::string password);
 
   std::string email;
 
 private:
   std::string password_hash;
+  std::string password_salt;
 };
 
 class GuestUser : public User {
