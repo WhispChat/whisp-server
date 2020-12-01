@@ -22,12 +22,12 @@ public:
                  std::string new_password);
   void set_message_data(client::Message &user_msg) override;
   std::string display_name() override;
-  bool check_password(std::string password);
+  bool compare_hash(std::string given_hash);
 
   std::string email;
 
 private:
-  std::string hashed_password;
+  std::string password_hash;
 };
 
 class GuestUser : public User {

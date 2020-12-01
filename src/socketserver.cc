@@ -1,6 +1,7 @@
 #include "whisp-server/socketserver.h"
 #include "whisp-server/connection.h"
 #include "whisp-server/db.h"
+#include "whisp-server/hashing.h"
 #include "whisp-server/logging.h"
 #include "whisp-server/user.h"
 
@@ -28,6 +29,7 @@ const std::regex
 
 void TCPSocketServer::initialize() {
   initialize_ssl_context();
+  hashing::setup_hashing();
 
   serv_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (serv_fd == -1) {
@@ -313,8 +315,8 @@ bool TCPSocketServer::parse_login_command(Connection *conn,
   std::string password = args.at(1);
 
   RegisteredUser *found_user = db::user::get(username);
-  // TODO: check password hash
-  if (!found_user || !found_user->check_password(password)) {
+  std::string password_hash = hashing::hash_password(password);
+  if (!found_user || !found_user->compare_hash(password_hash)) {
     send_message(create_message(server::Message::ERROR, "Incorrect login."),
                  *conn);
     return false;
@@ -360,7 +362,8 @@ bool TCPSocketServer::parse_register_command(Connection *conn,
   }
 
   try {
-    RegisteredUser *new_user = db::user::add(username, email, password);
+    std::string password_hash = hashing::hash_password(password);
+    RegisteredUser *new_user = db::user::add(username, email, password_hash);
 
     if (new_user) {
       conn->set_user(new_user);
