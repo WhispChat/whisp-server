@@ -37,3 +37,6 @@ build
 
 # SQLite3
 *.db
+
+# OpenSSL private key
+private_key.pem

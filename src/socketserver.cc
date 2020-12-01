@@ -1,7 +1,6 @@
 #include "whisp-server/socketserver.h"
 #include "whisp-server/connection.h"
 #include "whisp-server/db.h"
-#include "whisp-server/encryption.h"
 #include "whisp-server/logging.h"
 #include "whisp-server/user.h"
 
@@ -17,6 +16,7 @@
 
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <openssl/err.h>
 #include <sstream>
 #include <sys/socket.h>
 #include <thread>
@@ -27,9 +27,11 @@ const std::regex
                 std::regex_constants::icase);
 
 void TCPSocketServer::initialize() {
+  initialize_ssl_context();
+
   serv_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (serv_fd == -1) {
-    throw "socket failed";
+    throw std::string("socket failed");
   }
 
   serv_addr.sin_family = AF_INET;
@@ -39,32 +41,82 @@ void TCPSocketServer::initialize() {
   int reuse_port = 1;
   if (setsockopt(serv_fd, SOL_SOCKET, SO_REUSEADDR, &reuse_port, sizeof(int)) ==
       -1) {
-    throw "setsockopt failed";
+    throw std::string("setsockopt failed");
   }
 
   if (bind(serv_fd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) == -1) {
-    throw "bind failed";
+    throw std::string("bind failed");
   }
 
   if (listen(serv_fd, max_conn) == -1) {
-    throw "listen failed";
+    throw std::string("listen failed");
   }
+}
+
+void TCPSocketServer::initialize_ssl_context() {
+  SSL_load_error_strings();
+  OpenSSL_add_ssl_algorithms();
+
+  const SSL_METHOD *method = SSLv23_server_method();
+  ssl_ctx = SSL_CTX_new(method);
+  if (!ssl_ctx) {
+    ERR_print_errors_fp(stderr);
+    throw std::string("Unable to create SSL context");
+  }
+
+  SSL_CTX_set_min_proto_version(ssl_ctx, TLS1_2_VERSION);
+  SSL_CTX_set_ecdh_auto(ssl_ctx, 1);
+
+  if (SSL_CTX_use_certificate_file(ssl_ctx, cert_path.c_str(),
+                                   SSL_FILETYPE_PEM) <= 0) {
+    ERR_print_errors_fp(stderr);
+    exit(EXIT_FAILURE);
+  }
+
+  if (SSL_CTX_use_PrivateKey_file(ssl_ctx, key_path.c_str(),
+                                  SSL_FILETYPE_PEM) <= 0) {
+    ERR_print_errors_fp(stderr);
+    exit(EXIT_FAILURE);
+  }
+}
+
+std::string TCPSocketServer::get_supported_cipher_list() {
+  std::string cipher_list;
+
+  STACK_OF(SSL_CIPHER) *ciphers = SSL_CTX_get_ciphers(ssl_ctx);
+  for (int i = 0; i < sk_SSL_CIPHER_num(ciphers); i++) {
+    cipher_list +=
+        std::string(SSL_CIPHER_get_name(sk_SSL_CIPHER_value(ciphers, i))) +
+        ", ";
+  }
+
+  return cipher_list.substr(0, cipher_list.size() - 2);
 }
 
 void TCPSocketServer::serve() {
   LOG_INFO << "Listening on " << host << ":" << port << '\n';
   LOG_DEBUG << "Max connections: " << max_conn << '\n';
   LOG_DEBUG << "Server file descriptor: " << serv_fd << '\n';
+  LOG_DEBUG << "Supported ciphers: " << get_supported_cipher_list() << '\n';
 
   while (1) {
     int client_fd = -1;
     struct sockaddr_in client_addr;
     socklen_t client_len = sizeof(client_addr);
+    SSL *ssl;
 
     client_fd = accept(serv_fd, (struct sockaddr *)&client_addr, &client_len);
 
     if (client_fd == -1) {
       LOG_ERROR << "Failed to connect to incoming connection\n";
+      continue;
+    }
+
+    ssl = SSL_new(ssl_ctx);
+    SSL_set_fd(ssl, client_fd);
+
+    if (SSL_accept(ssl) <= 0) {
+      ERR_print_errors_fp(stderr);
       continue;
     }
 
@@ -74,7 +126,7 @@ void TCPSocketServer::serve() {
     GuestUser *user =
         new GuestUser("user" + std::to_string(connections.size()));
     Connection *new_conn =
-        new Connection(user, client_addr, client_len, client_fd);
+        new Connection(user, client_addr, client_len, client_fd, ssl);
 
     // Always send server status to new client even when max connections is
     // reached so client knows the server is full
@@ -100,7 +152,8 @@ void TCPSocketServer::serve() {
     send_message(create_message(server::Message::INFO, welcome_message),
                  *new_conn);
 
-    LOG_INFO << "New connection " << *new_conn << '\n';
+    LOG_INFO << "New connection " << *new_conn << " using cipher "
+             << SSL_get_cipher(ssl) << '\n';
     connections.insert(new_conn);
 
     // Send a message containing a list of all existing users to the new
@@ -122,41 +175,27 @@ void TCPSocketServer::serve() {
 void TCPSocketServer::cleanup() {
   server::ServerClosed closed_msg;
 
-  // NOTE: can't use close_connection function in loop as we need the iterator
-  // returned from erase.
-  auto itr = connections.begin();
-  while (itr != connections.end()) {
-    Connection *conn = *itr;
-
-    if (!conn) {
-      continue;
-    }
-
+  // send closed message to client which will close the client's respective
+  // thread and call close_connection().
+  for (auto conn : connections) {
     send_message(closed_msg, *conn);
-    close(conn->fd);
-
-    LOG_INFO << "Connection " << *conn << " closed" << '\n';
-
-    itr = connections.erase(itr);
-
-    delete conn->user;
-    delete conn;
   }
 
   close(serv_fd);
   db::close_database();
+  if (ssl_ctx) {
+    SSL_CTX_free(ssl_ctx);
+  }
 }
 
 void TCPSocketServer::handle_connection(Connection *conn) {
   char buffer[4096];
 
-  while (recv(conn->fd, buffer, sizeof buffer, 0) > 0) {
-    std::string decrypted_buffer(buffer);
-    decrypted_buffer =
-        Encryption::decrypt(decrypted_buffer, Encryption::OneTimePad);
+  while (SSL_read(conn->ssl, buffer, sizeof buffer) > 0) {
+    std::string str_buffer(buffer);
 
     client::Message user_msg;
-    user_msg.ParseFromString(decrypted_buffer);
+    user_msg.ParseFromString(str_buffer);
 
     if (Command::is_command(user_msg.content())) {
       Command cmd(user_msg.content());
@@ -175,6 +214,8 @@ void TCPSocketServer::handle_connection(Connection *conn) {
 
     memset(buffer, 0, sizeof buffer);
   }
+
+  close_connection(conn);
 }
 
 void TCPSocketServer::send_message(const google::protobuf::Message &msg,
@@ -185,14 +226,7 @@ void TCPSocketServer::send_message(const google::protobuf::Message &msg,
   std::string msg_str;
   any.SerializeToString(&msg_str);
 
-  std::string encrypted_msg =
-      Encryption::encrypt(msg_str, Encryption::OneTimePad);
-  // Message receives ASCII character 23, "End of Trans. Block"
-  // This is in case the TCP socket sends multiple messages in one packet
-  // TODO: Perhaps the delimiter should also be encrypted
-  encrypted_msg += 23;
-
-  send(conn.fd, encrypted_msg.data(), encrypted_msg.size(), MSG_NOSIGNAL);
+  SSL_write(conn.ssl, msg_str.data(), msg_str.size());
 }
 
 void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
@@ -204,8 +238,12 @@ void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
 void TCPSocketServer::close_connection(Connection *conn) {
   LOG_INFO << "Connection " << *conn << " disconnected" << '\n';
 
+  SSL_shutdown(conn->ssl);
   close(conn->fd);
+  SSL_free(conn->ssl);
+
   connections.erase(conn);
+
   delete conn->user;
   delete conn;
 }

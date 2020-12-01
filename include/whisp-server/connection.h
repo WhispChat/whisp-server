@@ -4,12 +4,14 @@
 
 #include <arpa/inet.h>
 #include <iostream>
+#include <openssl/ssl.h>
 #include <string>
 
 class Connection {
 public:
-  Connection(User *user, struct sockaddr_in addr, socklen_t addr_len, int fd)
-      : user(user), addr(addr), addr_len(addr_len), fd(fd) {}
+  Connection(User *user, struct sockaddr_in addr, socklen_t addr_len, int fd,
+             SSL *ssl)
+      : user(user), addr(addr), addr_len(addr_len), fd(fd), ssl(ssl) {}
 
   void set_user(User *new_user);
 
@@ -21,6 +23,7 @@ public:
   }
 
   User *user;
+  SSL *ssl;
   struct sockaddr_in addr;
   socklen_t addr_len;
   int fd;
