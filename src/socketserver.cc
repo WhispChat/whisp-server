@@ -162,7 +162,8 @@ void TCPSocketServer::serve() {
     if (connections.empty()) {
       user_list_message = "There are no users in this channel.";
     } else {
-      user_list_message = "Users in this channel: " + get_users_list() + ".";
+      user_list_message = "Users in this channel: " +
+          default_channel->get_users_list() + ".";
     }
     send_message(create_message(server::Message::INFO, user_list_message),
                  *new_conn);
@@ -248,15 +249,6 @@ void TCPSocketServer::close_connection(Connection *conn) {
   delete conn;
 }
 
-std::string TCPSocketServer::get_users_list() {
-  std::string user_list_message;
-
-  for (auto conn : connections) {
-    user_list_message += conn->user->display_name() + ", ";
-  }
-  return user_list_message.substr(0, user_list_message.size() - 2);
-}
-
 server::Status TCPSocketServer::get_server_status() {
   server::Status status;
   status.set_max_connections(max_conn);
@@ -289,9 +281,13 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
     return parse_set_command(conn, args);
   } else if (type.compare("users") == 0) {
     std::string user_list_message =
-        "Users in this channel: " + get_users_list() + ".";
+        "Users in this channel: " + conn->channel->get_users_list() + ".";
     send_message(create_message(server::Message::INFO, user_list_message),
                  *conn);
+  } else if (type.compare("create") == 0) {
+    return parse_create_command(conn, args);
+  } else if (type.compare("join") == 0) {
+    return parse_join_command(conn, args);
   } else {
     std::string error_msg = "Unknown command";
     send_message(create_message(server::Message::ERROR, error_msg), *conn);

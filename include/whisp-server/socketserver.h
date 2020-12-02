@@ -28,7 +28,6 @@ private:
   void send_message(const google::protobuf::Message &msg, Connection conn);
   void broadcast(const google::protobuf::Message &msg);
   void close_connection(Connection *conn);
-  std::string get_users_list();
 
   server::Status get_server_status();
   server::Message create_message(server::Message::MessageType type,
