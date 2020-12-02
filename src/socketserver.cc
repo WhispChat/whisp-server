@@ -152,19 +152,20 @@ void TCPSocketServer::serve() {
     bool default_channel_found = false;
     for (Channel &channel : channels) {
       if (channel.name == "general") {
-        *default_channel = channel;
+        default_channel = &channel;
         default_channel_found = true;
       }
     }
     if (!default_channel_found) {
-      default_channel = db::channel::get("general");
-      channels.push_back(*default_channel);
+      Channel *new_channel = db::channel::get("general");
+      channels.push_back(*new_channel);
+      default_channel = &channels[0];
     }
 
-    // Check if the default channel is full
+    // Check if the default channel has room
     if (default_channel->get_connection_amount() < default_channel->max_users) {
-      new_conn->channel = default_channel;
-      default_channel->add_user(user->display_name());
+      new_conn->channel = channels[0].name;
+      default_channel->add_user(new_conn->user->display_name());
 
       std::string join_message = "Joined channel \"" + default_channel->name +
           "\".";
@@ -191,8 +192,8 @@ void TCPSocketServer::serve() {
         default_channel->name);
 
     // Send a welcome message to the new connection
-    std::string welcome_message =
-        "Welcome to the channel, " + user->username + "!";
+    std::string welcome_message = "Welcome to channel " +
+        default_channel->name + ", " + new_conn->user->username + "!";
     send_message(create_message(server::Message::INFO, welcome_message),
                  *new_conn);
 
@@ -255,7 +256,7 @@ void TCPSocketServer::handle_connection(Connection *conn) {
       LOG_DEBUG << conn->user->display_name() << ": " << user_msg.content()
                 << '\n';
 
-      broadcast(user_msg, conn->channel->name);
+      broadcast(user_msg, conn->channel);
     }
 
     memset(buffer, 0, sizeof buffer);
@@ -278,7 +279,7 @@ void TCPSocketServer::send_message(const google::protobuf::Message &msg,
 void TCPSocketServer::broadcast(const google::protobuf::Message &msg,
     std::string target_channel) {
   for (auto conn : connections) {
-    if (conn->channel->name == target_channel) {
+    if (conn->channel == target_channel) {
       send_message(msg, *conn);
     }
   }
@@ -286,6 +287,12 @@ void TCPSocketServer::broadcast(const google::protobuf::Message &msg,
 
 void TCPSocketServer::close_connection(Connection *conn) {
   LOG_INFO << "Connection " << *conn << " disconnected" << '\n';
+
+  for (Channel &channel : channels) {
+    if (channel.name == conn->channel) {
+      channel.remove_user(conn->user->display_name());
+    }
+  }
 
   SSL_shutdown(conn->ssl);
   close(conn->fd);
@@ -328,10 +335,14 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
   } else if (type.compare("set") == 0) {
     return parse_set_command(conn, args);
   } else if (type.compare("users") == 0) {
-    std::string user_list_message =
-        "Users in this channel: " + conn->channel->get_users_list() + ".";
-    send_message(create_message(server::Message::INFO, user_list_message),
-                 *conn);
+    for (Channel &channel : channels) {
+      if (channel.name == conn->channel) {
+        std::string user_list_message =
+            "Users in this channel: " + channel.get_users_list() + ".";
+        send_message(create_message(server::Message::INFO, user_list_message),
+                     *conn);
+      }
+    }
   } else if (type.compare("create") == 0) {
     return parse_create_command(conn, args);
   } else if (type.compare("join") == 0) {
@@ -384,11 +395,14 @@ bool TCPSocketServer::parse_login_command(Connection *conn,
       return false;
     }
 
-    conn->channel->remove_user(conn->user->display_name());
-    conn->set_user(found_user);
-    conn->channel->add_user(conn->user->display_name());
+    for (Channel &channel : channels) {
+      if (channel.name == conn->channel) {
+        channel.remove_user(conn->user->display_name());
+        conn->set_user(found_user);
+        channel.add_user(conn->user->display_name());
+      }
+    }
 
-    conn->set_user(found_user);
     std::string login_message =
         "You are now logged in as " + found_user->username + ".";
     send_message(create_message(server::Message::INFO, login_message), *conn);
@@ -482,7 +496,7 @@ bool TCPSocketServer::parse_set_command(Connection *conn,
 
     LOG_DEBUG << username_message << '\n';
     broadcast(create_message(server::Message::INFO, username_message),
-      conn->channel->name);
+      conn->channel);
   } else {
     std::string error_msg = "Unknown variable \"" + set_variable + "\".";
     send_message(create_message(server::Message::ERROR, error_msg), *conn);
@@ -502,8 +516,6 @@ bool TCPSocketServer::parse_create_command(Connection *conn,
     send_message(create_message(server::Message::ERROR, error_msg), *conn);
     return false;
   }
-  send_message(create_message(server::Message::ERROR,
-      conn->user->display_name()), *conn);
 
   int max_users;
   if (args.size() == 1) {
@@ -569,7 +581,8 @@ bool TCPSocketServer::parse_join_command(Connection *conn,
   std::string channel_name = args.at(0);
 
   // Check if the user isn't already in the target channel
-  if (conn->channel->name == channel_name) {
+  std::string old_channel_name = conn->channel;
+  if (channel_name == old_channel_name) {
     std::string error_msg = "You're already in channel \"" + channel_name
         + "\".";
     send_message(create_message(server::Message::ERROR, error_msg), *conn);
@@ -590,23 +603,23 @@ bool TCPSocketServer::parse_join_command(Connection *conn,
         }
       }
       if (!target_channel_found) {
-        target_channel = new_target_channel;
-        channels.push_back(*target_channel);
+        channels.push_back(*new_target_channel);
+        target_channel = &channels.back();
       }
 
       // Check if the channel isn't full
       if (target_channel->get_connection_amount() < target_channel->max_users) {
-        // Broadcast a message to all existing connections in the old channel to
-        // inform about the lost connection
-        std::string user_left_message = conn->user->username +
-                                          " has left the channel.";
-        broadcast(create_message(server::Message::INFO, user_left_message),
-                  conn->channel->name);
-
-        // Leave the old channel
+        // Find and leave the old channel
         for (Channel &channel : channels) {
-          if (channel.name == conn->channel->name) {
+          if (channel.name == old_channel_name) {
             channel.remove_user(conn->user->display_name());
+
+            // Broadcast a message to all existing connections in the old
+            // channel to inform about the lost connection
+            std::string user_left_message = conn->user->display_name() +
+                                            " has left the channel.";
+            broadcast(create_message(server::Message::INFO, user_left_message),
+                      old_channel_name);
 
             // Check if the old channel needs to be removed from the active list
             if (channel.get_connection_amount() == 0) {
@@ -617,7 +630,7 @@ bool TCPSocketServer::parse_join_command(Connection *conn,
 
         // Join the new channel
         target_channel->add_user(conn->user->display_name());
-        conn->channel = target_channel;
+        conn->channel = target_channel->name;
 
         // Display success messages
         std::string success_message = "Joined channel \"" + channel_name
@@ -625,16 +638,16 @@ bool TCPSocketServer::parse_join_command(Connection *conn,
         send_message(create_message(server::Message::INFO, success_message),
                      *conn);
         std::string welcome_message = "Welcome to channel " +
-            conn->channel->name + ", " + conn->user->username + "!";
+            conn->channel + ", " + conn->user->username + "!";
         send_message(create_message(server::Message::INFO, welcome_message),
             *conn);
 
         // Broadcast a message to all existing connections in the new channel to
         // inform about the new connection
-        std::string user_joined_message = conn->user->username +
+        std::string user_joined_message = conn->user->display_name() +
                                           " has joined the channel.";
         broadcast(create_message(server::Message::INFO, user_joined_message),
-            conn->channel->name);
+            conn->channel);
 
         // Send a message containing a list of all existing users to the new
         // connection
