@@ -4,22 +4,19 @@
 #include <sstream>
 
 namespace hashing {
-EVP_MD_CTX *md_ctx;
-const int SALT_LEN = 32;
+const int SALT_LENGTH = 32;
+const EVP_MD *method = EVP_sha256();
 
-void setup_hashing() {
-  md_ctx = EVP_MD_CTX_new();
-  EVP_DigestInit_ex(md_ctx, EVP_sha256(), NULL);
-}
+EVP_MD_CTX *method_context = EVP_MD_CTX_new();
 
 std::string generate_salt() {
-  unsigned char salt_digest[SALT_LEN];
+  unsigned char salt_digest[SALT_LENGTH];
   unsigned int salt_size;
   std::stringstream salt_stream;
 
-  RAND_bytes(salt_digest, SALT_LEN);
+  RAND_bytes(salt_digest, SALT_LENGTH);
 
-  for (int i = 0; i < SALT_LEN; ++i) {
+  for (int i = 0; i < SALT_LENGTH; ++i) {
     salt_stream << std::hex << (unsigned int)salt_digest[i];
   }
 
@@ -27,20 +24,20 @@ std::string generate_salt() {
 }
 
 std::string hash_password(std::string password, std::string salt) {
+  unsigned char hash_digest[EVP_MAX_MD_SIZE];
+  unsigned int hash_size;
+  std::stringstream hash_stream;
   password = password + salt;
 
-  unsigned char enc_password_digest[EVP_MAX_MD_SIZE];
-  unsigned int enc_password_size;
-  std::stringstream enc_password_stream;
+  EVP_DigestInit_ex(method_context, method, NULL);
+  EVP_DigestUpdate(method_context, password.data(), password.size());
+  EVP_DigestFinal_ex(method_context, hash_digest, &hash_size);
 
-  EVP_DigestUpdate(md_ctx, password.data(), password.size());
-  EVP_DigestFinal_ex(md_ctx, enc_password_digest, &enc_password_size);
-
-  for (int i = 0; i < enc_password_size; ++i) {
-    enc_password_stream << std::hex << (unsigned int)enc_password_digest[i];
+  for (int i = 0; i < hash_size; ++i) {
+    hash_stream << std::hex << (unsigned int)hash_digest[i];
   }
 
-  return enc_password_stream.str();
+  return hash_stream.str();
 }
 
 } // namespace hashing

@@ -4,9 +4,11 @@
 #include <string>
 
 namespace hashing {
-extern EVP_MD_CTX *md_ctx;
+extern const int SALT_LENGTH;
+extern const EVP_MD *method;
 
-void setup_hashing();
+extern EVP_MD_CTX *method_context;
+
 std::string generate_salt();
 std::string hash_password(std::string password, std::string salt);
 

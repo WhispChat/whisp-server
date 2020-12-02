@@ -29,7 +29,6 @@ const std::regex
 
 void TCPSocketServer::initialize() {
   initialize_ssl_context();
-  hashing::setup_hashing();
 
   serv_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (serv_fd == -1) {
