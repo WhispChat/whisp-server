@@ -3,8 +3,9 @@ BEGIN TRANSACTION;
 CREATE TABLE IF NOT EXISTS "users" (
     "id" INTEGER PRIMARY KEY   AUTOINCREMENT,
     "username" TEXT NOT NULL UNIQUE,
-    "email" TEXT NOT NULL,
-    "password" TEXT NOT NULL
+    "email" TEXT NOT NULL UNIQUE,
+    "password_hash" TEXT NOT NULL,
+    "password_salt" TEXT NOT NULL
 );
 DELETE FROM sqlite_sequence;
 COMMIT;

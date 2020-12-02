@@ -13,7 +13,7 @@ void close_database();
 
 namespace user {
 RegisteredUser *add(std::string username, std::string email,
-                    std::string password);
+                    std::string password_hash, std::string password_salt);
 RegisteredUser *get(std::string username);
-}
-}
+} // namespace user
+} // namespace db

@@ -1,6 +1,7 @@
 #include "whisp-server/socketserver.h"
 #include "whisp-server/connection.h"
 #include "whisp-server/db.h"
+#include "whisp-server/hashing.h"
 #include "whisp-server/logging.h"
 #include "whisp-server/user.h"
 
@@ -312,20 +313,43 @@ bool TCPSocketServer::parse_login_command(Connection *conn,
   std::string username = args.at(0);
   std::string password = args.at(1);
 
-  RegisteredUser *found_user = db::user::get(username);
-  // TODO: check password hash
-  if (!found_user || !found_user->check_password(password)) {
-    send_message(create_message(server::Message::ERROR, "Incorrect login."),
-                 *conn);
-    return false;
+  try {
+    RegisteredUser *found_user = db::user::get(username);
+    if (*conn->user == *found_user) {
+      send_message(create_message(server::Message::INFO,
+                                  "You are already logged in as this user."),
+                   *conn);
+      return false;
+    }
+
+    if (!found_user || !found_user->compare_hash(password)) {
+      send_message(create_message(server::Message::ERROR, "Incorrect login."),
+                   *conn);
+      return false;
+    }
+
+    auto user_already_authenticated =
+        std::find_if(connections.begin(), connections.end(),
+                     [found_user](Connection *conn_iteratee) {
+                       return *conn_iteratee->user == *found_user;
+                     });
+    if (user_already_authenticated != connections.end()) {
+      send_message(
+          create_message(server::Message::ERROR,
+                         "This user is already logged in on another client."),
+          *conn);
+      return false;
+    }
+
+    conn->set_user(found_user);
+    std::string login_message =
+        "You are now logged in as " + found_user->username + ".";
+    send_message(create_message(server::Message::INFO, login_message), *conn);
+
+    LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
+  } catch (const std::exception &ex) {
+    send_message(create_message(server::Message::ERROR, ex.what()), *conn);
   }
-
-  conn->set_user(found_user);
-  std::string login_message =
-      "You are now logged in as " + found_user->username;
-  send_message(create_message(server::Message::INFO, login_message), *conn);
-
-  LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
 
   return false;
 }
@@ -360,7 +384,10 @@ bool TCPSocketServer::parse_register_command(Connection *conn,
   }
 
   try {
-    RegisteredUser *new_user = db::user::add(username, email, password);
+    std::string password_salt = hashing::generate_salt();
+    std::string password_hash = hashing::hash_password(password, password_salt);
+    RegisteredUser *new_user =
+        db::user::add(username, email, password_hash, password_salt);
 
     if (new_user) {
       conn->set_user(new_user);
@@ -376,8 +403,8 @@ bool TCPSocketServer::parse_register_command(Connection *conn,
                               "check with server administrator(s).";
       send_message(create_message(server::Message::ERROR, error_msg), *conn);
     }
-  } catch (char const *error_msg) {
-    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+  } catch (const std::exception &ex) {
+    send_message(create_message(server::Message::ERROR, ex.what()), *conn);
   }
 
   return false;
