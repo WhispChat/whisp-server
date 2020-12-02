@@ -4,6 +4,7 @@
 #include "whisp-protobuf/cpp/server.pb.h"
 #include "whisp-server/command.h"
 #include "whisp-server/connection.h"
+#include "whisp-server/channel.h"
 
 #include <openssl/ssl.h>
 #include <string>
@@ -37,10 +38,13 @@ private:
   bool parse_login_command(Connection *conn, std::vector<std::string> args);
   bool parse_register_command(Connection *conn, std::vector<std::string> args);
   bool parse_set_command(Connection *conn, std::vector<std::string> args);
+  bool parse_create_command(Connection *conn, std::vector<std::string> args);
+  bool parse_join_command(Connection *conn, std::vector<std::string> args);
 
   const std::string &host;
   int port;
   std::size_t max_conn;
+  std::vector<Channel> channels;
 
   std::string cert_path;
   std::string key_path;
