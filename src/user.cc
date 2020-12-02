@@ -1,12 +1,15 @@
 #include "whisp-server/user.h"
+#include "whisp-server/hashing.h"
 
-RegisteredUser::RegisteredUser(std::string new_username, std::string new_email,
-                               std::string new_password) {
-  userID = 0;
+RegisteredUser::RegisteredUser(unsigned int new_user_id,
+                               std::string new_username, std::string new_email,
+                               std::string new_password_hash,
+                               std::string new_password_salt) {
+  user_id = new_user_id;
   username = new_username;
   email = new_email;
-  // TODO: Obviously not final, password auth/encryption is considered for later
-  hashed_password = "hashed_" + new_password;
+  password_hash = new_password_hash;
+  password_salt = new_password_salt;
 }
 
 void RegisteredUser::set_message_data(client::Message &user_msg) {
@@ -18,13 +21,13 @@ void RegisteredUser::set_message_data(client::Message &user_msg) {
 
 std::string RegisteredUser::display_name() { return username; }
 
-bool RegisteredUser::check_password(std::string password) {
-  // TODO: compare actual hash
-  return hashed_password.compare("hashed_" + password) == 0;
+bool RegisteredUser::compare_hash(std::string password) {
+  std::string new_hash = hashing::hash_password(password, this->password_salt);
+  return password_hash.compare(new_hash) == 0;
 }
 
 GuestUser::GuestUser(std::string new_username) {
-  userID = 0;
+  user_id = 0;
   username = new_username;
 }
 

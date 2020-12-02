@@ -14,12 +14,12 @@ namespace db {
 
   namespace user {
     RegisteredUser *add(std::string username, std::string email,
-                        std::string password);
+                        std::string password_hash, std::string password_salt);
     RegisteredUser *get(std::string username);
-  }
+  } // namespace user
 
   namespace channel {
     Channel *add(std::string name, int owner_id, int max_users);
     Channel *get(std::string name);
   }
-}
+} // namespace db
