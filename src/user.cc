@@ -1,10 +1,11 @@
 #include "whisp-server/user.h"
 #include "whisp-server/hashing.h"
 
-RegisteredUser::RegisteredUser(std::string new_username, std::string new_email,
+RegisteredUser::RegisteredUser(unsigned int new_userID,
+                               std::string new_username, std::string new_email,
                                std::string new_password_hash,
                                std::string new_password_salt) {
-  userID = 0;
+  userID = new_userID;
   username = new_username;
   email = new_email;
   password_hash = new_password_hash;

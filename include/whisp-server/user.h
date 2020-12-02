@@ -12,14 +12,17 @@ public:
 
   void set_username(std::string new_username) { this->username = new_username; }
 
+  bool operator==(const User &u) const { return this->userID == u.userID; }
+
 protected:
   unsigned int userID;
 };
 
 class RegisteredUser : public User {
 public:
-  RegisteredUser(std::string new_username, std::string new_email,
-                 std::string new_password_hash, std::string new_password_salt);
+  RegisteredUser(unsigned int new_userID, std::string new_username,
+                 std::string new_email, std::string new_password_hash,
+                 std::string new_password_salt);
   void set_message_data(client::Message &user_msg) override;
   std::string display_name() override;
   bool compare_hash(std::string password);

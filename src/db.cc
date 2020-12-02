@@ -39,11 +39,12 @@ RegisteredUser *user::add(std::string username, std::string email,
   sqlite3_finalize(st);
 
   if (rc == SQLITE_CONSTRAINT) {
-    throw "Username already exists.";
+    throw "Username/e-mail is already taken.";
   }
 
   if (rc == SQLITE_DONE) {
-    return new RegisteredUser(username, email, password_hash, password_salt);
+    return new RegisteredUser((int)sqlite3_last_insert_rowid(conn), username,
+                              email, password_hash, password_salt);
   } else {
     LOG_ERROR << "Failed to register user: SQLite error " << rc << '\n';
     return nullptr;
@@ -60,13 +61,15 @@ RegisteredUser *user::get(std::string username) {
 
   int rc = sqlite3_step(st);
   if (rc == SQLITE_ROW) {
+    int id = sqlite3_column_int(st, 0);
     std::string username = std::string((char *)sqlite3_column_text(st, 1));
     std::string email = std::string((char *)sqlite3_column_text(st, 2));
     std::string password_hash = std::string((char *)sqlite3_column_text(st, 3));
     std::string password_salt = std::string((char *)sqlite3_column_text(st, 4));
     sqlite3_finalize(st);
 
-    return new RegisteredUser(username, email, password_hash, password_salt);
+    return new RegisteredUser(id, username, email, password_hash,
+                              password_salt);
   } else {
     sqlite3_finalize(st);
     LOG_ERROR << "Failed to get user: SQLite error " << rc << '\n';

@@ -314,15 +314,35 @@ bool TCPSocketServer::parse_login_command(Connection *conn,
   std::string password = args.at(1);
 
   RegisteredUser *found_user = db::user::get(username);
+  if (*conn->user == *found_user) {
+    send_message(create_message(server::Message::INFO,
+                                "You are already logged in as this user."),
+                 *conn);
+    return false;
+  }
+
   if (!found_user || !found_user->compare_hash(password)) {
     send_message(create_message(server::Message::ERROR, "Incorrect login."),
                  *conn);
     return false;
   }
 
+  auto user_already_authenticated =
+      std::find_if(connections.begin(), connections.end(),
+                   [found_user](Connection *conn_iteratee) {
+                     return *conn_iteratee->user == *found_user;
+                   });
+  if (user_already_authenticated != connections.end()) {
+    send_message(
+        create_message(server::Message::ERROR,
+                       "This user is already logged in on another client."),
+        *conn);
+    return false;
+  }
+
   conn->set_user(found_user);
   std::string login_message =
-      "You are now logged in as " + found_user->username;
+      "You are now logged in as " + found_user->username + ".";
   send_message(create_message(server::Message::INFO, login_message), *conn);
 
   LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
