@@ -41,6 +41,7 @@ RegisteredUser *user::add(std::string username, std::string email,
   sqlite3_finalize(st);
 
   if (rc == SQLITE_CONSTRAINT) {
+    user_read_last_id_mutex.unlock();
     throw std::runtime_error("Username/e-mail is already taken.");
   }
 
@@ -50,6 +51,7 @@ RegisteredUser *user::add(std::string username, std::string email,
     return new RegisteredUser(user_id, username, email, password_hash,
                               password_salt);
   } else {
+    user_read_last_id_mutex.unlock();
     LOG_ERROR << "Failed to register user: SQLite error " << rc << '\n';
     return nullptr;
   }
