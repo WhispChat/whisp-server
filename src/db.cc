@@ -3,6 +3,7 @@
 
 namespace db {
 sqlite3 *conn;
+std::mutex user_read_last_id_mutex;
 
 void init_database(std::string sqlite_path) {
   if (sqlite3_open_v2(sqlite_path.c_str(), &conn, SQLITE_OPEN_READWRITE,
@@ -35,16 +36,19 @@ RegisteredUser *user::add(std::string username, std::string email,
   sqlite3_bind_text(st, 4, password_salt.c_str(), password_salt.length(),
                     SQLITE_TRANSIENT);
 
+  user_read_last_id_mutex.lock();
   int rc = sqlite3_step(st);
   sqlite3_finalize(st);
 
   if (rc == SQLITE_CONSTRAINT) {
-    throw "Username/e-mail is already taken.";
+    throw std::runtime_error("Username/e-mail is already taken.");
   }
 
   if (rc == SQLITE_DONE) {
-    return new RegisteredUser((int)sqlite3_last_insert_rowid(conn), username,
-                              email, password_hash, password_salt);
+    int user_id = (int)sqlite3_last_insert_rowid(conn);
+    user_read_last_id_mutex.unlock();
+    return new RegisteredUser(user_id, username, email, password_hash,
+                              password_salt);
   } else {
     LOG_ERROR << "Failed to register user: SQLite error " << rc << '\n';
     return nullptr;

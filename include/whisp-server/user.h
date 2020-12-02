@@ -12,15 +12,15 @@ public:
 
   void set_username(std::string new_username) { this->username = new_username; }
 
-  bool operator==(const User &u) const { return this->userID == u.userID; }
+  bool operator==(const User &u) const { return this->user_id == u.user_id; }
 
 protected:
-  unsigned int userID;
+  unsigned int user_id;
 };
 
 class RegisteredUser : public User {
 public:
-  RegisteredUser(unsigned int new_userID, std::string new_username,
+  RegisteredUser(unsigned int new_user_id, std::string new_username,
                  std::string new_email, std::string new_password_hash,
                  std::string new_password_salt);
   void set_message_data(client::Message &user_msg) override;

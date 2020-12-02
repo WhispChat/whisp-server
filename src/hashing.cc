@@ -1,4 +1,5 @@
 #include "whisp-server/hashing.h"
+#include "whisp-server/logging.h"
 
 #include <openssl/rand.h>
 #include <sstream>
@@ -23,15 +24,26 @@ std::string generate_salt() {
   return salt_stream.str();
 }
 
+void handle_EVP_error() {
+  throw std::runtime_error("An error occurred during authentication - please "
+                           "contact server administrator(s).");
+}
+
 std::string hash_password(std::string password, std::string salt) {
   unsigned char hash_digest[EVP_MAX_MD_SIZE];
   unsigned int hash_size;
   std::stringstream hash_stream;
   password = password + salt;
 
-  EVP_DigestInit_ex(method_context, method, NULL);
-  EVP_DigestUpdate(method_context, password.data(), password.size());
-  EVP_DigestFinal_ex(method_context, hash_digest, &hash_size);
+  if (EVP_DigestInit_ex(method_context, method, NULL) != 1) {
+    handle_EVP_error();
+  }
+  if (EVP_DigestUpdate(method_context, password.data(), password.size()) != 1) {
+    handle_EVP_error();
+  }
+  if (EVP_DigestFinal_ex(method_context, hash_digest, &hash_size) != 1) {
+    handle_EVP_error();
+  }
 
   for (int i = 0; i < hash_size; ++i) {
     hash_stream << std::hex << (unsigned int)hash_digest[i];
