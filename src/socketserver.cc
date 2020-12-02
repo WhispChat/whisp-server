@@ -3,6 +3,7 @@
 #include "whisp-server/db.h"
 #include "whisp-server/logging.h"
 #include "whisp-server/user.h"
+#include "whisp-server/channel.h"
 
 #include <algorithm>
 #include <google/protobuf/any.pb.h>
@@ -13,6 +14,7 @@
 #include <string>
 #include <strings.h>
 #include <unistd.h>
+#include <vector>
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -152,6 +154,7 @@ void TCPSocketServer::serve() {
     send_message(create_message(server::Message::INFO, welcome_message),
                  *new_conn);
 
+    // Log the new connection
     LOG_INFO << "New connection " << *new_conn << " using cipher "
              << SSL_get_cipher(ssl) << '\n';
     connections.insert(new_conn);
@@ -210,7 +213,7 @@ void TCPSocketServer::handle_connection(Connection *conn) {
       LOG_DEBUG << conn->user->display_name() << ": " << user_msg.content()
                 << '\n';
 
-      broadcast(user_msg);
+      broadcast(user_msg, conn->channel->name);
     }
 
     memset(buffer, 0, sizeof buffer);
@@ -230,9 +233,12 @@ void TCPSocketServer::send_message(const google::protobuf::Message &msg,
   SSL_write(conn.ssl, msg_str.data(), msg_str.size());
 }
 
-void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
+void TCPSocketServer::broadcast(const google::protobuf::Message &msg,
+    std::string target_channel) {
   for (auto conn : connections) {
-    send_message(msg, *conn);
+    if (conn->channel->name == target_channel) {
+      send_message(msg, *conn);
+    }
   }
 }
 
@@ -403,7 +409,8 @@ bool TCPSocketServer::parse_set_command(Connection *conn,
                                    conn->user->username + ".";
 
     LOG_DEBUG << username_message << '\n';
-    broadcast(create_message(server::Message::INFO, username_message));
+    broadcast(create_message(server::Message::INFO, username_message),
+      conn->channel->name);
   } else {
     std::string error_msg = "Unknown variable \"" + set_variable + "\".";
     send_message(create_message(server::Message::ERROR, error_msg), *conn);

@@ -26,7 +26,8 @@ private:
 
   virtual void handle_connection(Connection *conn);
   void send_message(const google::protobuf::Message &msg, Connection conn);
-  void broadcast(const google::protobuf::Message &msg);
+  void broadcast(const google::protobuf::Message &msg,
+      std::string target_channel);
   void close_connection(Connection *conn);
 
   server::Status get_server_status();
