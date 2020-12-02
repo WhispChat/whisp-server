@@ -134,19 +134,60 @@ void TCPSocketServer::serve() {
     // reached so client knows the server is full
     send_message(get_server_status(), *new_conn);
 
+    // Check if the global amount of connections has been reached
     if (connections.size() >= max_conn) {
+      std::string error_msg = "Server is unable to allow new connections at "
+                              "this point in time. Please try again later.";
+      send_message(create_message(server::Message::ERROR, error_msg),
+          *new_conn);
+
+      LOG_DEBUG << "Denying new connection " << *new_conn <<
+          ": max global connections reached.\n";
+      close_connection(new_conn);
+    }
+
+    // Check if default server is active. If not, initialize it
+    Channel *default_channel;
+    bool default_channel_found = false;
+    for (Channel &channel : channels) {
+      if (channel.name == "general") {
+        *default_channel = channel;
+        default_channel_found = true;
+      }
+    }
+    if (!default_channel_found) {
+      default_channel = db::channel::get("general");
+      channels.push_back(*default_channel);
+    }
+
+    // Check if the default channel is full
+    if (default_channel->get_connection_amount() < default_channel->max_users) {
+      new_conn->channel = default_channel;
+      default_channel->add_user(user->display_name());
+
+      std::string join_message = "Joined channel \"" + default_channel->name +
+          "\".";
+      send_message(create_message(server::Message::INFO, join_message),
+          *new_conn);
+    } else {
       // Deny connection if we're at max connections
-      LOG_DEBUG << "Denying new connection " << *new_conn << ": server full."
-                << '\n';
+      std::string error_msg = "Channel \"" + default_channel->name +
+          "\" is full. Please try again later.";
+      send_message(create_message(server::Message::ERROR, error_msg),
+          *new_conn);
+
+      LOG_DEBUG << "Denying new connection " << *new_conn <<
+          ": default server full.\n";
       close_connection(new_conn);
       continue;
     }
 
-    // Broadcast a message to all existing connections to inform about the
-    // new connection
-    std::string user_joined_message =
-        user->username + " has joined the channel.";
-    broadcast(create_message(server::Message::INFO, user_joined_message));
+    // Broadcast a message to all existing connections in the default channel to
+    // inform about the new connection
+    std::string user_joined_message = user->display_name() +
+        " has joined the channel.";
+    broadcast(create_message(server::Message::INFO, user_joined_message),
+        default_channel->name);
 
     // Send a welcome message to the new connection
     std::string welcome_message =
@@ -321,8 +362,10 @@ bool TCPSocketServer::parse_login_command(Connection *conn,
                  *conn);
     return false;
   }
-
+  conn->channel->remove_user(conn->user->display_name());
   conn->set_user(found_user);
+  conn->channel->add_user(conn->user->display_name());
+
   std::string login_message =
       "You are now logged in as " + found_user->username;
   send_message(create_message(server::Message::INFO, login_message), *conn);
