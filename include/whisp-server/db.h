@@ -1,6 +1,7 @@
 #pragma once
 
 #include "whisp-server/user.h"
+#include "whisp-server/channel.h"
 
 #include <sqlite3.h>
 #include <string>
@@ -16,4 +17,8 @@ RegisteredUser *add(std::string username, std::string email,
                     std::string password);
 RegisteredUser *get(std::string username);
 }
+  namespace channel {
+    Channel *add(std::string name, int owner_id, int max_users);
+    Channel *get(std::string name);
+  }
 }
