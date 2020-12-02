@@ -5,15 +5,13 @@
 
 class User {
 public:
+  unsigned int userID;
   std::string username;
 
   virtual void set_message_data(client::Message &user_msg) = 0;
   virtual std::string display_name() = 0;
 
   void set_username(std::string new_username) { this->username = new_username; }
-
-protected:
-  unsigned int userID;
 };
 
 class RegisteredUser : public User {
