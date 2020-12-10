@@ -16,6 +16,7 @@ void Channel::remove_user(std::string username) {
   for (int i = 0; i < connected_users.size(); i++) {
     if (connected_users[i] == username) {
       connected_users.erase(connected_users.begin() + i);
+      break;
     }
   }
 }

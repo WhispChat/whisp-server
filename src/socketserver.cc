@@ -292,6 +292,7 @@ void TCPSocketServer::close_connection(Connection *conn) {
   for (Channel &channel : channels) {
     if (channel.name == conn->channel) {
       channel.remove_user(conn->user->display_name());
+      break;
     }
   }
 
@@ -539,9 +540,8 @@ bool TCPSocketServer::parse_create_command(Connection *conn,
 
   if (duplicate_channel) {
     // Channel name most likely already in use, inform user
-    std::string error_msg =
-        "Channel name \"" + channel_name +
-        "\" is already in use. Please choose another name.";
+    std::string error_msg = "Channel name \"" + channel_name +
+                            "\" is already in use. Please choose another name.";
     send_message(create_message(server::Message::ERROR, error_msg), *conn);
   } else {
     // Channel name is not in use, create new channel

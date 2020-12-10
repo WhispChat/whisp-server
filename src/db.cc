@@ -97,7 +97,7 @@ namespace db {
     sqlite3_finalize(st);
 
     if (rc == SQLITE_CONSTRAINT) {
-      throw "Channel name already in use.";
+      throw std::runtime_error("Channel name is already in use.");
     }
 
     if (rc == SQLITE_DONE) {
