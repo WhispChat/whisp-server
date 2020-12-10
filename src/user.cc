@@ -20,6 +20,7 @@ void RegisteredUser::set_message_data(client::Message &user_msg) {
 }
 
 std::string RegisteredUser::display_name() { return username; }
+bool RegisteredUser::is_registered() { return true; }
 
 bool RegisteredUser::compare_hash(std::string password) {
   std::string new_hash = hashing::hash_password(password, this->password_salt);
@@ -38,3 +39,4 @@ void GuestUser::set_message_data(client::Message &user_msg) {
 }
 
 std::string GuestUser::display_name() { return username + " (guest)"; }
+bool GuestUser::is_registered() { return false; }

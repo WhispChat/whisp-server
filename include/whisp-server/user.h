@@ -10,6 +10,7 @@ public:
 
   virtual void set_message_data(client::Message &user_msg) = 0;
   virtual std::string display_name() = 0;
+  virtual bool is_registered() = 0;
 
   void set_username(std::string new_username) { this->username = new_username; }
 
@@ -23,6 +24,7 @@ public:
                  std::string new_password_salt);
   void set_message_data(client::Message &user_msg) override;
   std::string display_name() override;
+  bool is_registered() override;
   bool compare_hash(std::string password);
 
   std::string email;
@@ -37,4 +39,5 @@ public:
   GuestUser(std::string new_username);
   void set_message_data(client::Message &user_msg) override;
   std::string display_name() override;
+  bool is_registered() override;
 };
