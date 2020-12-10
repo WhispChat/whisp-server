@@ -530,40 +530,36 @@ bool TCPSocketServer::parse_create_command(Connection *conn,
   }
   std::string channel_name = args.at(0);
 
-  // make channel name case insensitive
+  // Make channel name case insensitive
   std::transform(channel_name.begin(), channel_name.end(), channel_name.begin(),
                  [](unsigned char c) { return std::tolower(c); });
 
-  // check if channel_name is in use
-  try {
-    Channel *duplicate_channel = db::channel::get(channel_name);
+  // Check if channel name is in use
+  Channel *duplicate_channel = db::channel::get(channel_name);
 
-    if (duplicate_channel) {
-      // channel name most likely already in use, inform user
-      std::string error_msg =
-          "Channel name \"" + channel_name +
-          "\" is already in use. Please choose another name.";
-      send_message(create_message(server::Message::ERROR, error_msg), *conn);
-    } else {
-      // channel name is not in use, create new channel
-      Channel *new_channel =
-          db::channel::add(channel_name, conn->user->user_id, max_users);
-      if (new_channel) {
-        std::string success_message =
-            "Channel \"" + channel_name + "\" succesfully created.";
-
-        LOG_DEBUG << success_message << '\n';
-        send_message(create_message(server::Message::INFO, success_message),
-                     *conn);
-      } else {
-        // SQLite error, inform user
-        std::string error_msg = "Creating channel failed, please "
-                                "check with server administrator(s).";
-        send_message(create_message(server::Message::ERROR, error_msg), *conn);
-      }
-    }
-  } catch (char const *error_msg) {
+  if (duplicate_channel) {
+    // Channel name most likely already in use, inform user
+    std::string error_msg =
+        "Channel name \"" + channel_name +
+        "\" is already in use. Please choose another name.";
     send_message(create_message(server::Message::ERROR, error_msg), *conn);
+  } else {
+    // Channel name is not in use, create new channel
+    Channel *new_channel =
+        db::channel::add(channel_name, conn->user->user_id, max_users);
+    if (new_channel) {
+      std::string success_message =
+          "Channel \"" + channel_name + "\" succesfully created.";
+
+      LOG_DEBUG << success_message << '\n';
+      send_message(create_message(server::Message::INFO, success_message),
+                   *conn);
+    } else {
+      // SQLite error, inform user
+      std::string error_msg = "Creating channel failed, please "
+                              "check with server administrator(s).";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    }
   }
 
   return false;
