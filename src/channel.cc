@@ -3,13 +3,13 @@
 #include <vector>
 
 Channel::Channel(std::string name, int owner_id, int max_users) {
-  Channel::name = name;
-  Channel::owner_id = owner_id;
-  Channel::max_users = max_users;
+  this->name = name;
+  this->owner_id = owner_id;
+  this->max_users = max_users;
 }
 
 void Channel::add_user(std::string username) {
-  Channel::connected_users.push_back(username);
+  this->connected_users.push_back(username);
 }
 
 void Channel::remove_user(std::string username) {
