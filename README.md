@@ -40,6 +40,11 @@ sqlite3 whisp.db < sql/whisp.sql
 Make sure when you run the server binary that the SQLite3 path is set correctly
 (see note above).
 
+**NOTE**
+> The database contains a default channel (general) and an admin account that can be accessed by logging in with the following credentials:
+> * Username: admin
+> * Password: password123
+
 ## OpenSSL setup
 To generate the public key, private key, and certificate required to run the
 Whisp server using SSL, run the following commands in the `ssl/` folder:
