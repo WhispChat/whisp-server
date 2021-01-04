@@ -54,8 +54,8 @@ public:
 private:
   bool registered = false;
   unsigned int user_id = 0;
-  std::string username = nullptr;
-  std::string email = nullptr;
-  std::string password_hash = nullptr;
-  std::string password_salt = nullptr;
+  std::string username = "";
+  std::string email = "";
+  std::string password_hash = "";
+  std::string password_salt = "";
 };
