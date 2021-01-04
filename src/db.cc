@@ -48,14 +48,14 @@ RegisteredUser *user::add(std::string username, std::string email,
   if (rc == SQLITE_DONE) {
     int user_id = (int)sqlite3_last_insert_rowid(conn);
     user_read_last_id_mutex.unlock();
-    return (RegisteredUser *)((new UserBuilder())
-                                  ->set_user_id(user_id)
-                                  ->set_username(username)
-                                  ->set_email(email)
-                                  ->set_password_hash(password_hash)
-                                  ->set_password_salt(password_salt)
-                                  ->set_registered()
-                                  ->build());
+    return (RegisteredUser *)(new UserBuilder())
+        ->set_user_id(user_id)
+        ->set_username(username)
+        ->set_email(email)
+        ->set_password_hash(password_hash)
+        ->set_password_salt(password_salt)
+        ->set_registered()
+        ->build();
   } else {
     user_read_last_id_mutex.unlock();
     LOG_ERROR << "Failed to register user: SQLite error " << rc << '\n';
@@ -80,14 +80,14 @@ RegisteredUser *user::get(std::string username) {
     std::string password_salt = std::string((char *)sqlite3_column_text(st, 4));
     sqlite3_finalize(st);
 
-    return (RegisteredUser *)((new UserBuilder())
-                                  ->set_user_id(id)
-                                  ->set_username(username)
-                                  ->set_email(email)
-                                  ->set_password_hash(password_hash)
-                                  ->set_password_salt(password_salt)
-                                  ->set_registered()
-                                  ->build());
+    return (RegisteredUser *)(new UserBuilder())
+        ->set_user_id(id)
+        ->set_username(username)
+        ->set_email(email)
+        ->set_password_hash(password_hash)
+        ->set_password_salt(password_salt)
+        ->set_registered()
+        ->build();
   } else {
     sqlite3_finalize(st);
     LOG_ERROR << "Failed to get user: SQLite error " << rc << '\n';

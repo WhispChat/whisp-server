@@ -125,10 +125,9 @@ void TCPSocketServer::serve() {
     // authentication flow for registered users should be added alongside GUI
     // TODO: Better user id assignment
     GuestUser *user =
-        (GuestUser *)((new UserBuilder())
-                          ->set_username("user" +
-                                         std::to_string(connections.size()))
-                          ->build());
+        (GuestUser *)(new UserBuilder())
+            ->set_username("user" + std::to_string(connections.size()))
+            ->build();
     Connection *new_conn =
         new Connection(user, client_addr, client_len, client_fd, ssl);
 
