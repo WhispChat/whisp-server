@@ -23,7 +23,7 @@ void sigint_handler(int s) {
 
   if (ss) {
     LOG_INFO << "Closing connections...\n";
-    ss->cleanup();
+    ss->cleanup_all();
     delete ss;
   }
 
@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
     LOG_ERROR << msg << '\n';
   }
 
-  ss->cleanup();
+  ss->cleanup_all();
   delete ss;
 
   return EXIT_SUCCESS;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "whisp-server/user.h"
+#include "whisp-server/socketserver.h"
 
 #include <arpa/inet.h>
 #include <iostream>
@@ -10,10 +11,11 @@
 class Connection {
 public:
   Connection(User *user, struct sockaddr_in addr, socklen_t addr_len, int fd,
-             SSL *ssl)
-      : user(user), addr(addr), addr_len(addr_len), fd(fd), ssl(ssl) {}
+             SSL *ssl, TCPSocketServer socketserver);
 
   void set_user(User *new_user);
+  void send_message(const google::protobuf::Message &msg);
+  virtual void handle_connection(TCPSocketServer socketserver);
 
   bool operator==(const Connection &c) const { return this->fd == c.fd; }
   friend std::ostream &operator<<(std::ostream &os, const Connection &c) {

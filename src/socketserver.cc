@@ -1,12 +1,10 @@
 #include "whisp-server/socketserver.h"
-#include "whisp-server/connection.h"
 #include "whisp-server/db.h"
 #include "whisp-server/hashing.h"
 #include "whisp-server/logging.h"
 #include "whisp-server/user.h"
 
 #include <algorithm>
-#include <google/protobuf/any.pb.h>
 #include <google/protobuf/repeated_field.h>
 #include <iostream>
 #include <regex>
@@ -20,7 +18,6 @@
 #include <openssl/err.h>
 #include <sstream>
 #include <sys/socket.h>
-#include <thread>
 
 // Standardized regular expression checking for valid e-mail address
 const std::regex
@@ -121,25 +118,24 @@ void TCPSocketServer::serve() {
       continue;
     }
 
+    if (connections.size() >= max_conn) {
+      // Deny connection if we're at max connections
+      LOG_DEBUG << "Denying new connection: server full."
+                << '\n';
+      continue;
+    }
+
     // Currently, new connections will default to guest users - an
     // authentication flow for registered users should be added alongside GUI
     // TODO: Better user id assignment
     GuestUser *user =
         new GuestUser("user" + std::to_string(connections.size()));
     Connection *new_conn =
-        new Connection(user, client_addr, client_len, client_fd, ssl);
+        new Connection(user, client_addr, client_len, client_fd, ssl, this);
 
     // Always send server status to new client even when max connections is
     // reached so client knows the server is full
-    send_message(get_server_status(), *new_conn);
-
-    if (connections.size() >= max_conn) {
-      // Deny connection if we're at max connections
-      LOG_DEBUG << "Denying new connection " << *new_conn << ": server full."
-                << '\n';
-      close_connection(new_conn);
-      continue;
-    }
+    new_conn->send_message(get_server_status());
 
     // Broadcast a message to all existing connections to inform about the
     // new connection
@@ -150,8 +146,8 @@ void TCPSocketServer::serve() {
     // Send a welcome message to the new connection
     std::string welcome_message =
         "Welcome to the channel, " + user->username + "!";
-    send_message(create_message(server::Message::INFO, welcome_message),
-                 *new_conn);
+    new_conn->send_message(
+        create_message(server::Message::INFO, welcome_message));
 
     LOG_INFO << "New connection " << *new_conn << " using cipher "
              << SSL_get_cipher(ssl) << '\n';
@@ -165,78 +161,12 @@ void TCPSocketServer::serve() {
     } else {
       user_list_message = "Users in this channel: " + get_users_list() + ".";
     }
-    send_message(create_message(server::Message::INFO, user_list_message),
-                 *new_conn);
-
-    std::thread t(&TCPSocketServer::handle_connection, this, new_conn);
-    t.detach();
+    new_conn->send_message(
+        create_message(server::Message::INFO, user_list_message));
   }
 }
 
-void TCPSocketServer::cleanup() {
-  server::ServerClosed closed_msg;
-
-  // send closed message to client which will close the client's respective
-  // thread and call close_connection().
-  for (auto conn : connections) {
-    send_message(closed_msg, *conn);
-  }
-
-  close(serv_fd);
-  db::close_database();
-  if (ssl_ctx) {
-    SSL_CTX_free(ssl_ctx);
-  }
-}
-
-void TCPSocketServer::handle_connection(Connection *conn) {
-  char buffer[4096];
-
-  while (SSL_read(conn->ssl, buffer, sizeof buffer) > 0) {
-    std::string str_buffer(buffer);
-
-    client::Message user_msg;
-    user_msg.ParseFromString(str_buffer);
-
-    if (Command::is_command(user_msg.content())) {
-      Command cmd(user_msg.content());
-      bool close_conn = parse_command(conn, cmd);
-      if (close_conn) {
-        break;
-      }
-    } else {
-      conn->user->set_message_data(user_msg);
-
-      LOG_DEBUG << conn->user->display_name() << ": " << user_msg.content()
-                << '\n';
-
-      broadcast(user_msg);
-    }
-
-    memset(buffer, 0, sizeof buffer);
-  }
-
-  close_connection(conn);
-}
-
-void TCPSocketServer::send_message(const google::protobuf::Message &msg,
-                                   Connection conn) {
-  google::protobuf::Any any;
-  any.PackFrom(msg);
-
-  std::string msg_str;
-  any.SerializeToString(&msg_str);
-
-  SSL_write(conn.ssl, msg_str.data(), msg_str.size());
-}
-
-void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
-  for (auto conn : connections) {
-    send_message(msg, *conn);
-  }
-}
-
-void TCPSocketServer::close_connection(Connection *conn) {
+void TCPSocketServer::cleanup_one(Connection *conn) {
   LOG_INFO << "Connection " << *conn << " disconnected" << '\n';
 
   SSL_shutdown(conn->ssl);
@@ -247,6 +177,28 @@ void TCPSocketServer::close_connection(Connection *conn) {
 
   delete conn->user;
   delete conn;
+}
+
+void TCPSocketServer::cleanup_all() {
+  server::ServerClosed closed_msg;
+
+  // send closed message to client which will close the client's respective
+  // thread and call cleanup_one().
+  for (auto conn : connections) {
+    conn->send_message(closed_msg);
+  }
+
+  close(serv_fd);
+  db::close_database();
+  if (ssl_ctx) {
+    SSL_CTX_free(ssl_ctx);
+  }
+}
+
+void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
+  for (auto conn : connections) {
+    conn->send_message(msg);
+  }
 }
 
 std::string TCPSocketServer::get_users_list() {
@@ -291,11 +243,11 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
   } else if (type.compare("users") == 0) {
     std::string user_list_message =
         "Users in this channel: " + get_users_list() + ".";
-    send_message(create_message(server::Message::INFO, user_list_message),
-                 *conn);
+    conn->send_message(
+        create_message(server::Message::INFO, user_list_message));
   } else {
     std::string error_msg = "Unknown command";
-    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    conn->send_message(create_message(server::Message::ERROR, error_msg));
   }
 
   return false;
@@ -306,7 +258,7 @@ bool TCPSocketServer::parse_login_command(Connection *conn,
   if (args.size() != 2) {
     std::string error_msg = "Incorrect amount of arguments for set - "
                             "expected 2 (username, password).";
-    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    conn->send_message(create_message(server::Message::ERROR, error_msg));
     return false;
   }
 
@@ -316,15 +268,14 @@ bool TCPSocketServer::parse_login_command(Connection *conn,
   try {
     RegisteredUser *found_user = db::user::get(username);
     if (*conn->user == *found_user) {
-      send_message(create_message(server::Message::INFO,
-                                  "You are already logged in as this user."),
-                   *conn);
+      std::string info_msg = "Incorrect login";
+      conn->send_message(create_message(server::Message::INFO, info_msg));
       return false;
     }
 
     if (!found_user || !found_user->compare_hash(password)) {
-      send_message(create_message(server::Message::ERROR, "Incorrect login."),
-                   *conn);
+      std::string error_msg = "Incorrect login";
+      conn->send_message(create_message(server::Message::ERROR, error_msg));
       return false;
     }
 
@@ -334,21 +285,20 @@ bool TCPSocketServer::parse_login_command(Connection *conn,
                        return *conn_iteratee->user == *found_user;
                      });
     if (user_already_authenticated != connections.end()) {
-      send_message(
-          create_message(server::Message::ERROR,
-                         "This user is already logged in on another client."),
-          *conn);
+      std::string error_msg =
+          "This user is already logged in on another client.";
+      conn->send_message(create_message(server::Message::ERROR, error_msg));
       return false;
     }
 
     conn->set_user(found_user);
     std::string login_message =
         "You are now logged in as " + found_user->username + ".";
-    send_message(create_message(server::Message::INFO, login_message), *conn);
+    conn->send_message(create_message(server::Message::INFO, login_message));
 
     LOG_INFO << "Connection " << *conn << " has changed auth" << '\n';
   } catch (const std::exception &ex) {
-    send_message(create_message(server::Message::ERROR, ex.what()), *conn);
+    conn->send_message(create_message(server::Message::ERROR, ex.what()));
   }
 
   return false;
@@ -359,7 +309,7 @@ bool TCPSocketServer::parse_register_command(Connection *conn,
   if (args.size() != 3) {
     std::string error_msg = "Incorrect amount of arguments for set - "
                             "expected 3 (username, email, password).";
-    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    conn->send_message(create_message(server::Message::ERROR, error_msg));
     return false;
   }
 
@@ -370,7 +320,7 @@ bool TCPSocketServer::parse_register_command(Connection *conn,
   if (!std::regex_match(email, email_regex)) {
     std::string error_msg =
         "The e-mail address provided does not appear to be valid";
-    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    conn->send_message(create_message(server::Message::ERROR, error_msg));
     return false;
   }
 
@@ -379,7 +329,7 @@ bool TCPSocketServer::parse_register_command(Connection *conn,
   if (password.length() < 8) {
     std::string error_msg =
         "Passwords should be minimally eight characters long";
-    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    conn->send_message(create_message(server::Message::ERROR, error_msg));
     return false;
   }
 
@@ -391,20 +341,20 @@ bool TCPSocketServer::parse_register_command(Connection *conn,
 
     if (new_user) {
       conn->set_user(new_user);
-      std::string registration_message =
+      std::string registration_msg =
           "You have been registered, and are now logged in as " +
           new_user->username;
-      send_message(create_message(server::Message::INFO, registration_message),
-                   *conn);
+      conn->send_message(
+          create_message(server::Message::INFO, registration_msg));
       LOG_INFO << "Connection " << *conn << " has changed auth\n";
     } else {
       // SQLite error, inform user
       std::string error_msg = "Registration process failed, please "
                               "check with server administrator(s).";
-      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      conn->send_message(create_message(server::Message::ERROR, error_msg));
     }
   } catch (const std::exception &ex) {
-    send_message(create_message(server::Message::ERROR, ex.what()), *conn);
+    conn->send_message(create_message(server::Message::ERROR, ex.what()));
   }
 
   return false;
@@ -415,7 +365,7 @@ bool TCPSocketServer::parse_set_command(Connection *conn,
   if (args.size() != 2) {
     std::string error_msg = "Incorrect amount of arguments for set - "
                             "expected 2 (key, value).";
-    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    conn->send_message(create_message(server::Message::ERROR, error_msg));
     return false;
   }
 
@@ -437,7 +387,7 @@ bool TCPSocketServer::parse_set_command(Connection *conn,
     broadcast(create_message(server::Message::INFO, username_message));
   } else {
     std::string error_msg = "Unknown variable \"" + set_variable + "\".";
-    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    conn->send_message(create_message(server::Message::ERROR, error_msg));
   }
 
   return false;
