@@ -1,6 +1,5 @@
 #include "whisp-server/channel.h"
 #include "whisp-server/user.h"
-#include <vector>
 
 Channel::Channel(std::string name, int owner_id, int max_users) {
   this->name = name;

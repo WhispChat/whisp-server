@@ -281,8 +281,16 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
         "Users in this channel: " + users_list + ".";
     send_message(create_message(server::Message::INFO, user_list_message),
                  *conn);
+  } else if (type.compare("channels") == 0) {
+    std::string channel_list_message = "Available public channels: ";
+    std::vector<Channel> channel_list = db::channel::get_all();
+    for (auto channel : channel_list) {
+      channel_list_message += channel.name + " ";
+    }
+    send_message(create_message(server::Message::INFO, channel_list_message),
+                 *conn);
   } else if (type.compare("create") == 0) {
-    return parse_create_command(conn, args);
+    return parse_create_channel_command(conn, args);
   } else if (type.compare("join") == 0) {
     return parse_join_command(conn, args);
   } else {
@@ -440,8 +448,14 @@ bool TCPSocketServer::parse_set_command(Connection *conn,
   return false;
 }
 
-bool TCPSocketServer::parse_create_command(Connection *conn,
-                                           std::vector<std::string> args) {
+bool TCPSocketServer::parse_create_channel_command(
+    Connection *conn, std::vector<std::string> args) {
+  // Return an error if the first parameter isn't 'channel'
+  if (args.size() >= 0 && args.at(0) != "channel") {
+    std::string error_msg = "Unknown command";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    return false;
+  }
 
   if (!conn->user->is_registered()) {
     std::string error_msg = "You are not allowed to create channels. "
@@ -451,20 +465,30 @@ bool TCPSocketServer::parse_create_command(Connection *conn,
   }
 
   int max_users;
-  if (args.size() == 1) {
+  if (args.size() == 2) {
     max_users = 8;
-  } else if (args.size() == 2) {
-    max_users = std::stoi(args.at(1));
+  } else if (args.size() == 3) {
+    try {
+      max_users = std::stoi(args.at(2));
+    } catch (const std::exception &ex) {
+      std::string error_msg =
+          "Incorrect type of arguments for create channel - "
+          "expected at least 1 (channel name, max users [numbers only, "
+          "default: 8]).";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      return false;
+    }
   } else {
     std::string error_msg =
-        "Incorrect amount of arguments for create - "
-        "expected at least 1 (channel name, max users [default: 8]).";
+        "Incorrect amount of arguments for create channel - "
+        "expected at least 1 (channel name, max users [numbers only, default: "
+        "8]).";
     send_message(create_message(server::Message::ERROR, error_msg), *conn);
     return false;
   }
-  std::string channel_name = args.at(0);
 
   // Make channel name case insensitive
+  std::string channel_name = args.at(1);
   std::transform(channel_name.begin(), channel_name.end(), channel_name.begin(),
                  [](unsigned char c) { return std::tolower(c); });
 

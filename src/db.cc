@@ -1,5 +1,6 @@
 #include "whisp-server/db.h"
 #include "whisp-server/logging.h"
+#include <vector>
 
 namespace db {
 sqlite3 *conn;
@@ -140,5 +141,23 @@ Channel *channel::get(std::string name) {
     LOG_ERROR << "Failed to get channel: SQLite error " << rc << '\n';
     return nullptr;
   }
+}
+
+std::vector<Channel> channel::get_all() {
+  std::string sql = "SELECT * FROM channels;";
+  sqlite3_stmt *st;
+
+  sqlite3_prepare_v2(conn, sql.c_str(), -1, &st, nullptr);
+  std::vector<Channel> channel_list;
+
+  while (sqlite3_step(st) == SQLITE_ROW) {
+    std::string name = std::string((char *)sqlite3_column_text(st, 1));
+    int owner_id = sqlite3_column_int(st, 2);
+    int max_users = sqlite3_column_int(st, 3);
+    channel_list.push_back(*new Channel(name, owner_id, max_users));
+  }
+  sqlite3_finalize(st);
+
+  return channel_list;
 }
 } // namespace db

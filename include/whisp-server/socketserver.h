@@ -39,13 +39,12 @@ private:
   bool parse_login_command(Connection *conn, std::vector<std::string> args);
   bool parse_register_command(Connection *conn, std::vector<std::string> args);
   bool parse_set_command(Connection *conn, std::vector<std::string> args);
-  bool parse_create_command(Connection *conn, std::vector<std::string> args);
+  bool parse_create_channel_command(Connection *conn, std::vector<std::string> args);
   bool parse_join_command(Connection *conn, std::vector<std::string> args);
 
   const std::string &host;
   int port;
   std::size_t max_conn;
-  std::map<std::string, Channel> channels;
 
   std::string cert_path;
   std::string key_path;
@@ -55,4 +54,5 @@ private:
   struct sockaddr_in serv_addr;
 
   std::unordered_set<Connection *, ConnectionHash> connections;
+  std::map<std::string, Channel> channels;
 };
