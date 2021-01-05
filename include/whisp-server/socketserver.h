@@ -21,22 +21,8 @@ public:
 
 private:
   void initialize_ssl_context();
-  std::string get_supported_cipher_list();
-
   virtual void handle_connection(Connection *conn);
-  void send_message(const google::protobuf::Message &msg, Connection conn);
-  void broadcast(const google::protobuf::Message &msg);
   void close_connection(Connection *conn);
-  std::string get_users_list();
-
-  server::Status get_server_status();
-  server::Message create_message(server::Message::MessageType type,
-                                 std::string content);
-
-  bool parse_command(Connection *conn, Command cmd);
-  bool parse_login_command(Connection *conn, std::vector<std::string> args);
-  bool parse_register_command(Connection *conn, std::vector<std::string> args);
-  bool parse_set_command(Connection *conn, std::vector<std::string> args);
 
   const std::string &host;
   int port;
