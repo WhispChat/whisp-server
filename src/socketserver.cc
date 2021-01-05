@@ -1,4 +1,5 @@
 #include "whisp-server/socketserver.h"
+#include "whisp-server/channel.h"
 #include "whisp-server/connection.h"
 #include "whisp-server/db.h"
 #include "whisp-server/hashing.h"
@@ -14,6 +15,7 @@
 #include <string>
 #include <strings.h>
 #include <unistd.h>
+#include <vector>
 
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -135,40 +137,27 @@ void TCPSocketServer::serve() {
     // reached so client knows the server is full
     send_message(get_server_status(), *new_conn);
 
+    // Check if the global amount of connections has been reached
     if (connections.size() >= max_conn) {
-      // Deny connection if we're at max connections
-      LOG_DEBUG << "Denying new connection " << *new_conn << ": server full."
-                << '\n';
+      std::string error_msg = "Server is unable to allow new connections at "
+                              "this point in time. Please try again later.";
+      send_message(create_message(server::Message::ERROR, error_msg),
+                   *new_conn);
+
+      LOG_DEBUG << "Denying new connection " << *new_conn
+                << ": max global connections reached.\n";
       close_connection(new_conn);
-      continue;
     }
 
-    // Broadcast a message to all existing connections to inform about the
-    // new connection
-    std::string user_joined_message =
-        user->username + " has joined the channel.";
-    broadcast(create_message(server::Message::INFO, user_joined_message));
+    // Add the user to the general channel
+    std::vector<std::string> args;
+    args.push_back("general");
+    parse_join_command(new_conn, args);
 
-    // Send a welcome message to the new connection
-    std::string welcome_message =
-        "Welcome to the channel, " + user->username + "!";
-    send_message(create_message(server::Message::INFO, welcome_message),
-                 *new_conn);
-
+    // Log the new connection
     LOG_INFO << "New connection " << *new_conn << " using cipher "
              << SSL_get_cipher(ssl) << '\n';
     connections.insert(new_conn);
-
-    // Send a message containing a list of all existing users to the new
-    // connection
-    std::string user_list_message;
-    if (connections.empty()) {
-      user_list_message = "There are no users in this channel.";
-    } else {
-      user_list_message = "Users in this channel: " + get_users_list() + ".";
-    }
-    send_message(create_message(server::Message::INFO, user_list_message),
-                 *new_conn);
 
     std::thread t(&TCPSocketServer::handle_connection, this, new_conn);
     t.detach();
@@ -212,7 +201,7 @@ void TCPSocketServer::handle_connection(Connection *conn) {
       LOG_DEBUG << conn->user->display_name() << ": " << user_msg.content()
                 << '\n';
 
-      broadcast(user_msg);
+      broadcast(user_msg, conn->channel->name);
     }
 
     memset(buffer, 0, sizeof buffer);
@@ -232,14 +221,19 @@ void TCPSocketServer::send_message(const google::protobuf::Message &msg,
   SSL_write(conn.ssl, msg_str.data(), msg_str.size());
 }
 
-void TCPSocketServer::broadcast(const google::protobuf::Message &msg) {
+void TCPSocketServer::broadcast(const google::protobuf::Message &msg,
+                                std::string target_channel_name) {
   for (auto conn : connections) {
-    send_message(msg, *conn);
+    if (conn->channel->name == target_channel_name) {
+      send_message(msg, *conn);
+    }
   }
 }
 
 void TCPSocketServer::close_connection(Connection *conn) {
   LOG_INFO << "Connection " << *conn << " disconnected" << '\n';
+
+  channels.at(conn->channel->name)->remove_user(conn->user->display_name());
 
   SSL_shutdown(conn->ssl);
   close(conn->fd);
@@ -249,15 +243,6 @@ void TCPSocketServer::close_connection(Connection *conn) {
 
   delete conn->user;
   delete conn;
-}
-
-std::string TCPSocketServer::get_users_list() {
-  std::string user_list_message;
-
-  for (auto conn : connections) {
-    user_list_message += conn->user->display_name() + ", ";
-  }
-  return user_list_message.substr(0, user_list_message.size() - 2);
 }
 
 server::Status TCPSocketServer::get_server_status() {
@@ -291,10 +276,23 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
   } else if (type.compare("set") == 0) {
     return parse_set_command(conn, args);
   } else if (type.compare("users") == 0) {
+    auto users_list = channels.at(conn->channel->name)->get_users_list();
     std::string user_list_message =
-        "Users in this channel: " + get_users_list() + ".";
+        "Users in this channel: " + users_list + ".";
     send_message(create_message(server::Message::INFO, user_list_message),
                  *conn);
+  } else if (type.compare("channels") == 0) {
+    std::string channel_list_message = "Available public channels: ";
+    std::vector<Channel> channel_list = db::channel::get_all();
+    for (auto channel : channel_list) {
+      channel_list_message += channel.name + " ";
+    }
+    send_message(create_message(server::Message::INFO, channel_list_message),
+                 *conn);
+  } else if (type.compare("create") == 0) {
+    return parse_create_channel_command(conn, args);
+  } else if (type.compare("join") == 0) {
+    return parse_join_command(conn, args);
   } else {
     std::string error_msg = "Unknown command";
     send_message(create_message(server::Message::ERROR, error_msg), *conn);
@@ -343,7 +341,11 @@ bool TCPSocketServer::parse_login_command(Connection *conn,
       return false;
     }
 
+    Channel current_channel = *channels.at(conn->channel->name);
+    current_channel.remove_user(conn->user->display_name());
     conn->set_user(found_user);
+    current_channel.add_user(conn->user->display_name());
+
     std::string login_message =
         "You are now logged in as " + found_user->username + ".";
     send_message(create_message(server::Message::INFO, login_message), *conn);
@@ -436,11 +438,178 @@ bool TCPSocketServer::parse_set_command(Connection *conn,
                                    conn->user->username + ".";
 
     LOG_DEBUG << username_message << '\n';
-    broadcast(create_message(server::Message::INFO, username_message));
+    broadcast(create_message(server::Message::INFO, username_message),
+              conn->channel->name);
   } else {
     std::string error_msg = "Unknown variable \"" + set_variable + "\".";
     send_message(create_message(server::Message::ERROR, error_msg), *conn);
   }
+
+  return false;
+}
+
+bool TCPSocketServer::parse_create_channel_command(
+    Connection *conn, std::vector<std::string> args) {
+  // Return an error if the first parameter isn't 'channel'
+  if (args.size() >= 0 && args.at(0) != "channel") {
+    std::string error_msg = "Unknown command";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    return false;
+  }
+
+  if (!conn->user->is_registered()) {
+    std::string error_msg = "You are not allowed to create channels. "
+                            "Please register or login and try again.";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    return false;
+  }
+
+  int max_users;
+  if (args.size() == 2) {
+    max_users = 8;
+  } else if (args.size() == 3) {
+    try {
+      max_users = std::stoi(args.at(2));
+    } catch (const std::exception &ex) {
+      std::string error_msg =
+          "Incorrect type of arguments for create channel - "
+          "expected at least 1 (channel name, max users [numbers only, "
+          "default: 8]).";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      return false;
+    }
+  } else {
+    std::string error_msg =
+        "Incorrect amount of arguments for create channel - "
+        "expected at least 1 (channel name, max users [numbers only, default: "
+        "8]).";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    return false;
+  }
+
+  // Make channel name case insensitive
+  std::string channel_name = args.at(1);
+  std::transform(channel_name.begin(), channel_name.end(), channel_name.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+
+  // Check if channel name is in use
+  Channel *duplicate_channel = db::channel::get(channel_name);
+
+  if (duplicate_channel) {
+    // Channel name most likely already in use, inform user
+    std::string error_msg = "Channel name \"" + channel_name +
+                            "\" is already in use. Please choose another name.";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+  } else {
+    // Channel name is not in use, create new channel
+    Channel *new_channel =
+        db::channel::add(channel_name, conn->user->user_id, max_users);
+    if (new_channel) {
+      std::string success_message =
+          "Channel \"" + channel_name + "\" succesfully created.";
+
+      LOG_DEBUG << success_message << '\n';
+      send_message(create_message(server::Message::INFO, success_message),
+                   *conn);
+    } else {
+      // SQLite error, inform user
+      std::string error_msg = "Creating channel failed, please "
+                              "check with server administrator(s).";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    }
+  }
+
+  return false;
+}
+
+bool TCPSocketServer::parse_join_command(Connection *conn,
+                                         std::vector<std::string> args) {
+
+  // Return an error if the amount of parameters is incorrect
+  if (args.size() != 1) {
+    std::string error_msg = "Incorrect amount of arguments for join - "
+                            "expected 1 (channel name).";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    return false;
+  }
+
+  // Check if the target channel exists
+  Channel *target_channel = db::channel::get(args.at(0));
+  if (target_channel) {
+    // Retrieve channel from channels list if it's already active
+    if (channels.count(target_channel->name)) {
+      target_channel = channels.at(target_channel->name);
+
+      // Return an error if the target channel is full
+      if (target_channel->get_connection_amount() ==
+          target_channel->max_users) {
+        std::string error_msg = "Channel \"" + target_channel->name +
+                                "\" is full. Please try again later.";
+        send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      }
+    }
+  } else {
+    // Return an error if the target channel does not exist
+    std::string error_msg = "Channel \"" + args.at(0) + "\" does not exist.";
+    send_message(create_message(server::Message::ERROR, error_msg), *conn);
+    return false;
+  }
+
+  if (conn->channel) {
+    Channel current_channel = *channels.at(conn->channel->name);
+
+    // Return an error if the user is already in the target channel
+    if (target_channel->name == current_channel.name) {
+      std::string error_msg =
+          "You're already in channel \"" + target_channel->name + "\".";
+      send_message(create_message(server::Message::ERROR, error_msg), *conn);
+      return false;
+    }
+
+    // Remove the connection from the current channel
+    current_channel.remove_user(conn->user->display_name());
+
+    // Check if the channel is now empty, if so: remove channel from list
+    if (current_channel.get_connection_amount() == 0) {
+      channels.erase(current_channel.name);
+    } else {
+      // Overwrite the channel object to save any changes made
+      channels.extract(current_channel.name);
+      channels.insert(std::make_pair(current_channel.name, &current_channel));
+
+      // Inform all connections in the current channel about the connection
+      // leaving
+      std::string user_left_message =
+          conn->user->display_name() + " has left the channel.";
+      broadcast(create_message(server::Message::INFO, user_left_message),
+                current_channel.name);
+    }
+  }
+
+  // Add the connection to the target channel
+  target_channel->add_user(conn->user->display_name());
+  conn->set_channel(target_channel);
+
+  // Inform connection about successfully joining the target channel
+  std::string success_message =
+      "Joined channel \"" + target_channel->name + "\".";
+  send_message(create_message(server::Message::INFO, success_message), *conn);
+  std::string welcome_message = "Welcome to channel " + target_channel->name +
+                                ", " + conn->user->username + "!";
+  send_message(create_message(server::Message::INFO, welcome_message), *conn);
+  std::string user_list_message;
+  user_list_message =
+      "Users in this channel: " + target_channel->get_users_list() + ".";
+  send_message(create_message(server::Message::INFO, user_list_message), *conn);
+
+  // Inform all connections in the target channel about the new connection
+  std::string user_joined_message =
+      conn->user->display_name() + " has joined the channel.";
+  broadcast(create_message(server::Message::INFO, user_joined_message),
+            conn->channel->name);
+
+  // Overwrite the channel object to save any changes made
+  channels.insert(std::make_pair(target_channel->name, target_channel));
 
   return false;
 }

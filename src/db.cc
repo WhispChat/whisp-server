@@ -1,5 +1,6 @@
 #include "whisp-server/db.h"
 #include "whisp-server/logging.h"
+#include <vector>
 
 namespace db {
 sqlite3 *conn;
@@ -93,5 +94,70 @@ RegisteredUser *user::get(std::string username) {
     LOG_ERROR << "Failed to get user: SQLite error " << rc << '\n';
     return nullptr;
   }
+}
+
+Channel *channel::add(std::string name, int owner_id, int max_users) {
+  std::string sql = "INSERT INTO channels (id, name, owner_id, max_users) "
+                    "VALUES (NULL, ?, ?, ?);";
+  sqlite3_stmt *st;
+
+  sqlite3_prepare_v2(conn, sql.c_str(), -1, &st, nullptr);
+  sqlite3_bind_text(st, 1, name.c_str(), name.length(), SQLITE_TRANSIENT);
+  sqlite3_bind_int(st, 2, owner_id);
+  sqlite3_bind_int(st, 3, max_users);
+
+  int rc = sqlite3_step(st);
+  sqlite3_finalize(st);
+
+  if (rc == SQLITE_CONSTRAINT) {
+    throw std::runtime_error("Channel name is already in use.");
+  }
+
+  if (rc == SQLITE_DONE) {
+    return new Channel(name, owner_id, max_users);
+  } else {
+    LOG_ERROR << "Failed to create channel: SQLite error " << rc << '\n';
+    return nullptr;
+  }
+}
+
+Channel *channel::get(std::string name) {
+  std::string sql = "SELECT * FROM channels WHERE name = ?;";
+  sqlite3_stmt *st;
+
+  sqlite3_prepare_v2(conn, sql.c_str(), -1, &st, nullptr);
+  sqlite3_bind_text(st, 1, name.c_str(), name.length(), SQLITE_TRANSIENT);
+
+  int rc = sqlite3_step(st);
+  if (rc == SQLITE_ROW) {
+    std::string name = std::string((char *)sqlite3_column_text(st, 1));
+    int owner_id = sqlite3_column_int(st, 2);
+    int max_users = sqlite3_column_int(st, 3);
+    sqlite3_finalize(st);
+
+    return new Channel(name, owner_id, max_users);
+  } else {
+    sqlite3_finalize(st);
+    LOG_ERROR << "Failed to get channel: SQLite error " << rc << '\n';
+    return nullptr;
+  }
+}
+
+std::vector<Channel> channel::get_all() {
+  std::string sql = "SELECT * FROM channels;";
+  sqlite3_stmt *st;
+
+  sqlite3_prepare_v2(conn, sql.c_str(), -1, &st, nullptr);
+  std::vector<Channel> channel_list;
+
+  while (sqlite3_step(st) == SQLITE_ROW) {
+    std::string name = std::string((char *)sqlite3_column_text(st, 1));
+    int owner_id = sqlite3_column_int(st, 2);
+    int max_users = sqlite3_column_int(st, 3);
+    channel_list.push_back(*new Channel(name, owner_id, max_users));
+  }
+  sqlite3_finalize(st);
+
+  return channel_list;
 }
 } // namespace db

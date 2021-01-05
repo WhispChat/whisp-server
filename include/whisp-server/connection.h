@@ -1,5 +1,6 @@
 #pragma once
 
+#include "whisp-server/channel.h"
 #include "whisp-server/user.h"
 
 #include <arpa/inet.h>
@@ -14,6 +15,7 @@ public:
       : user(user), addr(addr), addr_len(addr_len), fd(fd), ssl(ssl) {}
 
   void set_user(User *new_user);
+  void set_channel(Channel *new_channel);
 
   bool operator==(const Connection &c) const { return this->fd == c.fd; }
   friend std::ostream &operator<<(std::ostream &os, const Connection &c) {
@@ -23,6 +25,8 @@ public:
   }
 
   User *user;
+  Channel *channel;
+
   SSL *ssl;
   struct sockaddr_in addr;
   socklen_t addr_len;
