@@ -33,8 +33,8 @@ void TCPSocketServer::initialize() {
     throw std::string("listen failed");
   }
 
-  MessageManager message_manager(connections);
-  CommandManager command_manager(message_manager, connections);
+  message_manager = new MessageManager(connections);
+  command_manager = new CommandManager(message_manager, connections);
 }
 
 void TCPSocketServer::initialize_ssl_context() {
@@ -134,6 +134,14 @@ void TCPSocketServer::cleanup() {
   // thread and call close_connection().
   for (auto conn : connections) {
     message_manager->send_message(closed_msg, *conn);
+  }
+
+  if (message_manager) {
+    delete message_manager;
+  }
+
+  if (command_manager) {
+    delete command_manager;
   }
 
   close(serv_fd);

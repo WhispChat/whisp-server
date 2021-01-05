@@ -6,7 +6,7 @@
 
 class CommandManager {
 public:
-  CommandManager(MessageManager _message_manager,
+  CommandManager(MessageManager *_message_manager,
                  std::unordered_set<Connection *, ConnectionHash> &_connections)
       : message_manager(_message_manager), connections(_connections) {}
 
@@ -21,6 +21,6 @@ private:
   bool set_command(Connection *conn, std::vector<std::string> args);
   void users_command(Connection *conn);
 
-  MessageManager message_manager;
-  std::unordered_set<Connection *, ConnectionHash> connections;
+  MessageManager *message_manager;
+  std::unordered_set<Connection *, ConnectionHash> &connections;
 };

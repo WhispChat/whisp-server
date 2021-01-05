@@ -18,5 +18,5 @@ public:
   std::string get_users_list();
 
 private:
-  std::unordered_set<Connection *, ConnectionHash> connections;
+  std::unordered_set<Connection *, ConnectionHash> &connections;
 };

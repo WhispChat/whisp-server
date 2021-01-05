@@ -13,8 +13,8 @@ const std::regex
 // Shorthand function for sending message to a specific connection
 void CommandManager::send_and_create(server::Message::MessageType type,
                                      std::string content, Connection *conn) {
-  message_manager.send_message(message_manager.create_message(type, content),
-                               *conn);
+  message_manager->send_message(message_manager->create_message(type, content),
+                                *conn);
 }
 
 bool CommandManager::parse_command(Connection *conn, Command cmd) {
@@ -168,7 +168,7 @@ bool CommandManager::set_command(Connection *conn,
                                    conn->user->username + ".";
 
     LOG_DEBUG << username_message << '\n';
-    message_manager.broadcast(message_manager.create_message(
+    message_manager->broadcast(message_manager->create_message(
         server::Message::INFO, username_message));
   } else {
     std::string error_msg = "Unknown variable \"" + set_variable + "\".";
@@ -180,6 +180,6 @@ bool CommandManager::set_command(Connection *conn,
 
 void CommandManager::users_command(Connection *conn) {
   std::string user_list_message =
-      "Users in this channel: " + message_manager.get_users_list() + ".";
+      "Users in this channel: " + message_manager->get_users_list() + ".";
   send_and_create(server::Message::INFO, user_list_message, conn);
 }
