@@ -2,7 +2,6 @@
 #include "whisp-server/db.h"
 #include "whisp-server/hashing.h"
 #include "whisp-server/logging.h"
-#include "whisp-server/messaging.h"
 
 #include <regex>
 
@@ -12,35 +11,26 @@ const std::regex
                 std::regex_constants::icase);
 
 // Shorthand function for sending message to a specific connection
-void send_and_create(server::Message::MessageType type, std::string content,
-                     Connection *conn) {
-  messaging::send_message(messaging::create_message(type, content), *conn);
+void CommandManager::send_and_create(server::Message::MessageType type,
+                                     std::string content, Connection *conn) {
+  message_manager.send_message(message_manager.create_message(type, content),
+                               *conn);
 }
 
-// Prototype functions for convenience
-bool login_command(Connection *conn, std::vector<std::string> args, std::unordered_set<Connection *, ConnectionHash> connections);
-bool register_command(Connection *conn, std::vector<std::string> args);
-bool set_command(Connection *conn, std::vector<std::string> args, std::unordered_set<Connection *, ConnectionHash> connections);
-void users_command(Connection *conn, std::unordered_set<Connection *, ConnectionHash> connections);
-
-namespace commandmanager {
-bool parse_command(
-    Connection *conn, Command cmd,
-    std::unordered_set<Connection *, ConnectionHash> connections) {
+bool CommandManager::parse_command(Connection *conn, Command cmd) {
   std::vector<std::string> args = cmd.args;
   std::string type = cmd.type;
 
-  // TODO: Convert to switch statement
   if (type.compare("quit") == 0) {
     return true;
   } else if (type.compare("login") == 0) {
-    login_command(conn, args, connections);
+    login_command(conn, args);
   } else if (type.compare("register") == 0) {
     register_command(conn, args);
   } else if (type.compare("set") == 0) {
-    set_command(conn, args, connections);
+    set_command(conn, args);
   } else if (type.compare("users") == 0) {
-    users_command(conn, connections);
+    users_command(conn);
   } else {
     std::string error_msg = "Unknown command";
     send_and_create(server::Message::ERROR, error_msg, conn);
@@ -48,11 +38,9 @@ bool parse_command(
 
   return false;
 }
-} // namespace commandmanager
 
-bool login_command(
-    Connection *conn, std::vector<std::string> args,
-    std::unordered_set<Connection *, ConnectionHash> connections) {
+bool CommandManager::login_command(Connection *conn,
+                                   std::vector<std::string> args) {
   if (args.size() != 2) {
     std::string error_msg = "Incorrect amount of arguments for set - "
                             "expected 2 (username, password).";
@@ -101,7 +89,8 @@ bool login_command(
   return false;
 }
 
-bool register_command(Connection *conn, std::vector<std::string> args) {
+bool CommandManager::register_command(Connection *conn,
+                                      std::vector<std::string> args) {
   if (args.size() != 3) {
     std::string error_msg = "Incorrect amount of arguments for set - "
                             "expected 3 (username, email, password).";
@@ -155,8 +144,8 @@ bool register_command(Connection *conn, std::vector<std::string> args) {
   return false;
 }
 
-bool set_command(Connection *conn, std::vector<std::string> args,
-                 std::unordered_set<Connection *, ConnectionHash> connections) {
+bool CommandManager::set_command(Connection *conn,
+                                 std::vector<std::string> args) {
   if (args.size() != 2) {
     std::string error_msg = "Incorrect amount of arguments for set - "
                             "expected 2 (key, value).";
@@ -179,9 +168,8 @@ bool set_command(Connection *conn, std::vector<std::string> args,
                                    conn->user->username + ".";
 
     LOG_DEBUG << username_message << '\n';
-    messaging::broadcast(
-        messaging::create_message(server::Message::INFO, username_message),
-        connections);
+    message_manager.broadcast(message_manager.create_message(
+        server::Message::INFO, username_message));
   } else {
     std::string error_msg = "Unknown variable \"" + set_variable + "\".";
     send_and_create(server::Message::ERROR, error_msg, conn);
@@ -190,11 +178,8 @@ bool set_command(Connection *conn, std::vector<std::string> args,
   return false;
 }
 
-void users_command(
-    Connection *conn,
-    std::unordered_set<Connection *, ConnectionHash> connections) {
+void CommandManager::users_command(Connection *conn) {
   std::string user_list_message =
-      "Users in this channel: " +
-      messaging::helper::get_users_list(connections) + ".";
+      "Users in this channel: " + message_manager.get_users_list() + ".";
   send_and_create(server::Message::INFO, user_list_message, conn);
 }

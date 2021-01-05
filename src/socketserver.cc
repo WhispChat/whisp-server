@@ -1,8 +1,6 @@
 #include "whisp-server/socketserver.h"
-#include "whisp-server/commandmanager.h"
 #include "whisp-server/db.h"
 #include "whisp-server/logging.h"
-#include "whisp-server/messaging.h"
 #include "whisp-server/user.h"
 
 #include <openssl/err.h>
@@ -34,6 +32,9 @@ void TCPSocketServer::initialize() {
   if (listen(serv_fd, max_conn) == -1) {
     throw std::string("listen failed");
   }
+
+  MessageManager message_manager(connections);
+  CommandManager command_manager(message_manager, connections);
 }
 
 void TCPSocketServer::initialize_ssl_context() {
@@ -68,7 +69,7 @@ void TCPSocketServer::serve() {
   LOG_DEBUG << "Max connections: " << max_conn << '\n';
   LOG_DEBUG << "Server file descriptor: " << serv_fd << '\n';
   LOG_DEBUG << "Supported ciphers: "
-            << messaging::helper::get_supported_cipher_list(ssl_ctx) << '\n';
+            << message_manager->get_supported_cipher_list(ssl_ctx) << '\n';
 
   while (1) {
     int client_fd = -1;
@@ -106,7 +107,7 @@ void TCPSocketServer::serve() {
     server::Status status;
     status.set_max_connections(max_conn);
     status.set_number_connections(connections.size());
-    messaging::send_message(status, *new_conn);
+    message_manager->send_message(status, *new_conn);
 
     if (connections.size() >= max_conn) {
       // Deny connection if we're at max connections
@@ -119,7 +120,7 @@ void TCPSocketServer::serve() {
     LOG_INFO << "New connection " << *new_conn << " using cipher "
              << SSL_get_cipher(ssl) << '\n';
     connections.insert(new_conn);
-    messaging::helper::welcome_message(user, new_conn, connections);
+    message_manager->welcome_message(user, new_conn);
 
     std::thread t(&TCPSocketServer::handle_connection, this, new_conn);
     t.detach();
@@ -132,7 +133,7 @@ void TCPSocketServer::cleanup() {
   // send closed message to client which will close the client's respective
   // thread and call close_connection().
   for (auto conn : connections) {
-    messaging::send_message(closed_msg, *conn);
+    message_manager->send_message(closed_msg, *conn);
   }
 
   close(serv_fd);
@@ -153,7 +154,7 @@ void TCPSocketServer::handle_connection(Connection *conn) {
 
     if (Command::is_command(user_msg.content())) {
       Command cmd(user_msg.content());
-      bool close_conn = commandmanager::parse_command(conn, cmd, connections);
+      bool close_conn = command_manager->parse_command(conn, cmd);
       if (close_conn) {
         break;
       }
@@ -163,7 +164,7 @@ void TCPSocketServer::handle_connection(Connection *conn) {
       LOG_DEBUG << conn->user->display_name() << ": " << user_msg.content()
                 << '\n';
 
-      messaging::broadcast(user_msg, connections);
+      message_manager->broadcast(user_msg);
     }
 
     memset(buffer, 0, sizeof buffer);
