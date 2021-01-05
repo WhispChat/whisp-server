@@ -233,7 +233,7 @@ void TCPSocketServer::broadcast(const google::protobuf::Message &msg,
 void TCPSocketServer::close_connection(Connection *conn) {
   LOG_INFO << "Connection " << *conn << " disconnected" << '\n';
 
-  channels.at(conn->channel->name).remove_user(conn->user->display_name());
+  channels.at(conn->channel->name)->remove_user(conn->user->display_name());
 
   SSL_shutdown(conn->ssl);
   close(conn->fd);
@@ -276,7 +276,7 @@ bool TCPSocketServer::parse_command(Connection *conn, Command cmd) {
   } else if (type.compare("set") == 0) {
     return parse_set_command(conn, args);
   } else if (type.compare("users") == 0) {
-    auto users_list = channels.at(conn->channel->name).get_users_list();
+    auto users_list = channels.at(conn->channel->name)->get_users_list();
     std::string user_list_message =
         "Users in this channel: " + users_list + ".";
     send_message(create_message(server::Message::INFO, user_list_message),
@@ -341,7 +341,7 @@ bool TCPSocketServer::parse_login_command(Connection *conn,
       return false;
     }
 
-    Channel current_channel = channels.at(conn->channel->name);
+    Channel current_channel = *channels.at(conn->channel->name);
     current_channel.remove_user(conn->user->display_name());
     conn->set_user(found_user);
     current_channel.add_user(conn->user->display_name());
@@ -538,7 +538,7 @@ bool TCPSocketServer::parse_join_command(Connection *conn,
   if (target_channel) {
     // Retrieve channel from channels list if it's already active
     if (channels.count(target_channel->name)) {
-      target_channel = &channels.at(target_channel->name);
+      target_channel = channels.at(target_channel->name);
 
       // Return an error if the target channel is full
       if (target_channel->get_connection_amount() ==
@@ -556,7 +556,7 @@ bool TCPSocketServer::parse_join_command(Connection *conn,
   }
 
   if (conn->channel) {
-    Channel current_channel = channels.at(conn->channel->name);
+    Channel current_channel = *channels.at(conn->channel->name);
 
     // Return an error if the user is already in the target channel
     if (target_channel->name == current_channel.name) {
@@ -575,7 +575,7 @@ bool TCPSocketServer::parse_join_command(Connection *conn,
     } else {
       // Overwrite the channel object to save any changes made
       channels.extract(current_channel.name);
-      channels.insert(std::make_pair(current_channel.name, current_channel));
+      channels.insert(std::make_pair(current_channel.name, &current_channel));
 
       // Inform all connections in the current channel about the connection
       // leaving
@@ -609,7 +609,7 @@ bool TCPSocketServer::parse_join_command(Connection *conn,
             conn->channel->name);
 
   // Overwrite the channel object to save any changes made
-  channels.insert(std::make_pair(target_channel->name, *target_channel));
+  channels.insert(std::make_pair(target_channel->name, target_channel));
 
   return false;
 }
