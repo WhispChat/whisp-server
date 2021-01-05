@@ -40,3 +40,42 @@ void GuestUser::set_message_data(client::Message &user_msg) {
 
 std::string GuestUser::display_name() { return username + " (guest)"; }
 bool GuestUser::is_registered() { return false; }
+
+UserBuilder *UserBuilder::set_registered() {
+  this->registered = true;
+  return this;
+}
+
+UserBuilder *UserBuilder::set_user_id(unsigned int user_id) {
+  this->user_id = user_id;
+  return this;
+}
+
+UserBuilder *UserBuilder::set_username(std::string username) {
+  this->username = username;
+  return this;
+}
+
+UserBuilder *UserBuilder::set_email(std::string email) {
+  this->email = email;
+  return this;
+}
+
+UserBuilder *UserBuilder::set_password_hash(std::string password_hash) {
+  this->password_hash = password_hash;
+  return this;
+}
+
+UserBuilder *UserBuilder::set_password_salt(std::string password_salt) {
+  this->password_salt = password_salt;
+  return this;
+}
+
+User *UserBuilder::build() {
+  if (registered) {
+    return new RegisteredUser(user_id, username, email, password_hash,
+                              password_salt);
+  }
+
+  return new GuestUser(username);
+}

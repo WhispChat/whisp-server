@@ -41,3 +41,22 @@ public:
   std::string display_name() override;
   bool is_registered() override;
 };
+
+class UserBuilder {
+public:
+  UserBuilder *set_registered();
+  UserBuilder *set_user_id(unsigned int user_id);
+  UserBuilder *set_username(std::string username);
+  UserBuilder *set_email(std::string email);
+  UserBuilder *set_password_hash(std::string password_hash);
+  UserBuilder *set_password_salt(std::string password_salt);
+  User *build();
+
+private:
+  bool registered = false;
+  unsigned int user_id = 0;
+  std::string username = "";
+  std::string email = "";
+  std::string password_hash = "";
+  std::string password_salt = "";
+};
