@@ -2,11 +2,11 @@
 
 #include "whisp-protobuf/cpp/client.pb.h"
 #include "whisp-protobuf/cpp/server.pb.h"
-#include "whisp-server/channel.h"
 #include "whisp-server/command.h"
+#include "whisp-server/commandmanager.h"
 #include "whisp-server/connection.h"
+#include "whisp-server/messagemanager.h"
 
-#include <map>
 #include <openssl/ssl.h>
 #include <string>
 #include <unordered_set>
@@ -23,25 +23,8 @@ public:
 
 private:
   void initialize_ssl_context();
-  std::string get_supported_cipher_list();
-
   virtual void handle_connection(Connection *conn);
-  void send_message(const google::protobuf::Message &msg, Connection conn);
-  void broadcast(const google::protobuf::Message &msg,
-                 std::string target_channel);
   void close_connection(Connection *conn);
-
-  server::Status get_server_status();
-  server::Message create_message(server::Message::MessageType type,
-                                 std::string content);
-
-  bool parse_command(Connection *conn, Command cmd);
-  bool parse_login_command(Connection *conn, std::vector<std::string> args);
-  bool parse_register_command(Connection *conn, std::vector<std::string> args);
-  bool parse_set_command(Connection *conn, std::vector<std::string> args);
-  bool parse_create_channel_command(Connection *conn,
-                                    std::vector<std::string> args);
-  bool parse_join_command(Connection *conn, std::vector<std::string> args);
 
   const std::string &host;
   int port;
@@ -53,6 +36,9 @@ private:
 
   int serv_fd;
   struct sockaddr_in serv_addr;
+
+  MessageManager *message_manager;
+  CommandManager *command_manager;
 
   std::unordered_set<Connection *, ConnectionHash> connections;
   std::map<std::string, Channel *> channels;
