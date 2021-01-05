@@ -1,7 +1,7 @@
 #pragma once
 
-#include "whisp-server/user.h"
 #include "whisp-server/channel.h"
+#include "whisp-server/user.h"
 
 #include <arpa/inet.h>
 #include <iostream>

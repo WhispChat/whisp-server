@@ -44,10 +44,11 @@ void help(char **argv) {
                "  -m, --max-connections=MAX_CONN\n"
                "                          set maximum amount of connections "
                "allowed (default: "
-            << DEFAULT_MAX_CONN << ")\n"
-                                   "  -s, --sqlite-path=DATABASE_FILE\n"
-                                   "                          set sqlite "
-                                   "database path (default: "
+            << DEFAULT_MAX_CONN
+            << ")\n"
+               "  -s, --sqlite-path=DATABASE_FILE\n"
+               "                          set sqlite "
+               "database path (default: "
             << DEFAULT_SQLITE_PATH
             << ")\n"
                "  -c, --ssl-cert=CERT_PATH\n"

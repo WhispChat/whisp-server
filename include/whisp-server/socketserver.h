@@ -2,14 +2,14 @@
 
 #include "whisp-protobuf/cpp/client.pb.h"
 #include "whisp-protobuf/cpp/server.pb.h"
+#include "whisp-server/channel.h"
 #include "whisp-server/command.h"
 #include "whisp-server/connection.h"
-#include "whisp-server/channel.h"
 
+#include <map>
 #include <openssl/ssl.h>
 #include <string>
 #include <unordered_set>
-#include <map>
 
 class TCPSocketServer {
 public:
@@ -28,7 +28,7 @@ private:
   virtual void handle_connection(Connection *conn);
   void send_message(const google::protobuf::Message &msg, Connection conn);
   void broadcast(const google::protobuf::Message &msg,
-      std::string target_channel);
+                 std::string target_channel);
   void close_connection(Connection *conn);
 
   server::Status get_server_status();

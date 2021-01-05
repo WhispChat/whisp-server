@@ -1,7 +1,7 @@
 #pragma once
 
-#include "whisp-server/user.h"
 #include "whisp-protobuf/cpp/client.pb.h"
+#include "whisp-server/user.h"
 #include <string>
 #include <vector>
 
@@ -20,4 +20,3 @@ public:
 private:
   std::vector<std::string> connected_users;
 };
-
