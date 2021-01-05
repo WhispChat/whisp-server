@@ -9,6 +9,7 @@
 #include <openssl/ssl.h>
 #include <string>
 #include <unordered_set>
+#include <map>
 
 class TCPSocketServer {
 public:
@@ -44,7 +45,7 @@ private:
   const std::string &host;
   int port;
   std::size_t max_conn;
-  std::vector<Channel> channels;
+  std::map<std::string, Channel> channels;
 
   std::string cert_path;
   std::string key_path;
