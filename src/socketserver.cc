@@ -147,6 +147,7 @@ void TCPSocketServer::serve() {
       LOG_DEBUG << "Denying new connection " << *new_conn
                 << ": max global connections reached.\n";
       close_connection(new_conn);
+      continue;
     }
 
     // Add the user to the general channel
@@ -524,7 +525,6 @@ bool TCPSocketServer::parse_create_channel_command(
 
 bool TCPSocketServer::parse_join_command(Connection *conn,
                                          std::vector<std::string> args) {
-
   // Return an error if the amount of parameters is incorrect
   if (args.size() != 1) {
     std::string error_msg = "Incorrect amount of arguments for join - "
