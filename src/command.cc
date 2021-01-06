@@ -7,9 +7,12 @@
 #include <cctype>
 #include <iostream>
 #include <iterator>
+#include <numeric>
 #include <regex>
 #include <sstream>
 #include <string>
+
+using namespace std::placeholders;
 
 // Standardized regular expression checking for valid e-mail address
 const std::regex
@@ -21,6 +24,7 @@ Command::Command(std::string message, MessageManager *_message_manager,
                  std::map<std::string, Channel *> &_channels)
     : message(message), message_manager(_message_manager),
       connections(_connections), channels(_channels) {
+  initialize_commands();
   std::vector<std::string> message_parts = split_message_parts();
 
   type = message_parts.front();
@@ -29,6 +33,41 @@ Command::Command(std::string message, MessageManager *_message_manager,
                  [](unsigned char c) { return std::tolower(c); });
 
   args = {message_parts.begin() + 1, message_parts.end()};
+}
+void Command::initialize_commands() {
+  commands.push_back(
+      std::make_tuple("help", "- Show this message",
+                      std::bind(&Command::help_command, this, _1)));
+  commands.push_back(std::make_tuple(
+      "login", "username password - Login as user `username` with "
+               "password `password`",
+      std::bind(&Command::login_command, this, _1)));
+  commands.push_back(std::make_tuple(
+      "register", "username email password - Register an account",
+      std::bind(&Command::register_command, this, _1)));
+  commands.push_back(
+      std::make_tuple("quit", "- Close connection to server", nullptr));
+  commands.push_back(std::make_tuple(
+      "set", "var value - Set variable `var` to `value`. Available "
+             "values: username",
+      std::bind(&Command::set_command, this, _1)));
+  commands.push_back(
+      std::make_tuple("users", "- Show all users connected to current channel",
+                      std::bind(&Command::users_command, this, _1)));
+  commands.push_back(
+      std::make_tuple("channels", "- Show all available channels",
+                      std::bind(&Command::channels_command, this, _1)));
+  commands.push_back(std::make_tuple(
+      "create", "res ...args - Create resource `res` with args. Available "
+                "resources: channel",
+      std::bind(&Command::create_channel_command, this, _1)));
+  commands.push_back(
+      std::make_tuple("join", "chan - Join channel `chan`",
+                      std::bind(&Command::join_channel_command, this, _1)));
+  commands.push_back(std::make_tuple(
+      "msg", "username ...message - Send private message `message` to user "
+             "`username`",
+      std::bind(&Command::private_message_command, this, _1)));
 }
 
 bool Command::is_command(std::string message) { return message.front() == '/'; }
@@ -42,26 +81,34 @@ std::vector<std::string> Command::split_message_parts() {
 bool Command::parse_command(Connection *conn) {
   if (type.compare("quit") == 0) {
     return true;
-  } else if (type.compare("login") == 0) {
-    login_command(conn);
-  } else if (type.compare("register") == 0) {
-    register_command(conn);
-  } else if (type.compare("set") == 0) {
-    set_command(conn);
-  } else if (type.compare("users") == 0) {
-    users_command(conn);
-  } else if (type.compare("channels") == 0) {
-    channels_command(conn);
-  } else if (type.compare("create") == 0) {
-    create_channel_command(conn);
-  } else if (type.compare("join") == 0) {
-    join_channel_command(conn);
-  } else {
-    std::string error_msg = "Unknown command";
-    message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
   }
 
+  for (std::tuple<std::string, std::string, std::function<void(Connection *)>>
+           cmd : commands) {
+    if (std::get<0>(cmd).compare(type) == 0) {
+      std::get<2>(cmd)(conn);
+      return false;
+    }
+  }
+
+  std::string error_msg = "Unknown command";
+  message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
+
   return false;
+}
+
+void Command::help_command(Connection *conn) {
+  message_manager->create_and_send(server::Message::INFO, "Available commands:",
+                                   conn);
+  for (std::tuple<std::string, std::string, std::function<void(Connection *)>>
+           cmd : commands) {
+    std::string name = std::get<0>(cmd);
+    std::string description = std::get<1>(cmd);
+    std::stringstream ss;
+    // ugly and not client-independent whitespace, but it works
+    ss << "&nbsp;&nbsp;/" << name << " " << description;
+    message_manager->create_and_send(server::Message::INFO, ss.str(), conn);
+  }
 }
 
 void Command::login_command(Connection *conn) {
@@ -253,7 +300,8 @@ void Command::create_channel_command(Connection *conn) {
   } else {
     std::string error_msg =
         "Incorrect amount of arguments for create channel - "
-        "expected at least 1 (channel name, max users [numbers only, default: "
+        "expected at least 1 (channel name, max users [numbers only, "
+        "default: "
         "8]).";
     message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
     return;
@@ -338,7 +386,8 @@ void Command::join_channel_command(Connection *conn) {
     // Remove the connection from the current channel
     current_channel.remove_user(conn->user->display_name());
 
-    // Check if the channel is now empty, if so: remove channel from list
+    // Check if the channel is now empty, if so: remove channel from
+    // list
     if (current_channel.get_connection_amount() == 0) {
       channels.erase(current_channel.name);
     } else {
@@ -346,7 +395,8 @@ void Command::join_channel_command(Connection *conn) {
       channels.extract(current_channel.name);
       channels.insert(std::make_pair(current_channel.name, &current_channel));
 
-      // Inform all connections in the current channel about the connection
+      // Inform all connections in the current channel about the
+      // connection
       // leaving
       std::string user_left_message =
           conn->user->display_name() + " has left the channel.";
@@ -364,4 +414,42 @@ void Command::join_channel_command(Connection *conn) {
 
   // Overwrite the channel object to save any changes made
   channels.insert(std::make_pair(target_channel->name, target_channel));
+}
+
+void Command::private_message_command(Connection *conn) {
+  if (args.size() < 2) {
+    std::string error_msg = "Incorrect amount of arguments for msg - "
+                            "expected at least 2 (username, message).";
+    message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
+    return;
+  }
+
+  std::string receiver_username = args.at(0);
+  // All other args are part of message, join by space
+  std::string message =
+      std::accumulate(std::begin(args) + 1, std::end(args), std::string(),
+                      [](std::string &ss, std::string &s) {
+                        return ss.empty() ? s : ss + " " + s;
+                      });
+
+  for (auto rec_conn : connections) {
+    if (rec_conn->user->username == receiver_username) {
+      // todo: protobuf struct
+      user::PrivateMessageIn private_msg_in;
+      private_msg_in.set_content(message);
+      conn->user->set_message_data(private_msg_in);
+
+      message_manager->send_message(private_msg_in, *rec_conn);
+
+      user::PrivateMessageOut private_msg_out;
+      private_msg_out.set_content(message);
+      conn->user->set_message_data(private_msg_out);
+
+      message_manager->send_message(private_msg_out, *conn);
+      return;
+    }
+  }
+
+  std::string error_msg = "No user " + receiver_username + " online.";
+  message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
 }
