@@ -50,7 +50,7 @@ std::string MessageManager::get_supported_cipher_list(SSL_CTX *ssl_ctx) {
   return cipher_list.substr(0, cipher_list.size() - 2);
 }
 
-void MessageManager::send_welcome_message(User *user, Connection *conn) {
+void MessageManager::send_welcome_message(Connection *conn) {
   // Inform connection about successfully joining the target channel
   std::string welcome_message = "Welcome to channel " + conn->channel->name +
                                 ", " + conn->user->username + "!";

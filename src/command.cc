@@ -395,8 +395,7 @@ void Command::join_channel_command(Connection *conn) {
       channels.insert(std::make_pair(current_channel.name, &current_channel));
 
       // Inform all connections in the current channel about the
-      // connection
-      // leaving
+      // connection leaving
       std::string user_left_message =
           conn->user->display_name() + " has left the channel.";
       message_manager->broadcast(message_manager->create_message(
@@ -409,7 +408,7 @@ void Command::join_channel_command(Connection *conn) {
   target_channel->add_user(conn->user->display_name());
   conn->set_channel(target_channel);
 
-  message_manager->send_welcome_message(conn->user, conn);
+  message_manager->send_welcome_message(conn);
 
   // Overwrite the channel object to save any changes made
   channels.insert(std::make_pair(target_channel->name, target_channel));
