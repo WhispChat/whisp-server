@@ -1,5 +1,6 @@
 #include "whisp-server/socketserver.h"
 #include "whisp-server/channel.h"
+#include "whisp-server/command.h"
 #include "whisp-server/db.h"
 #include "whisp-server/logging.h"
 #include "whisp-server/user.h"
@@ -36,7 +37,6 @@ void TCPSocketServer::initialize() {
   }
 
   message_manager = new MessageManager(connections);
-  command_manager = new CommandManager(message_manager, connections, channels);
 }
 
 void TCPSocketServer::initialize_ssl_context() {
@@ -120,9 +120,8 @@ void TCPSocketServer::serve() {
     }
 
     // Add the user to the general channel
-    std::vector<std::string> args;
-    args.push_back("general");
-    command_manager->join_channel_command(new_conn, args);
+    Command cmd("/join general", message_manager, connections, channels);
+    cmd.parse_command(new_conn);
 
     LOG_INFO << "New connection " << *new_conn << " using cipher "
              << SSL_get_cipher(ssl) << '\n';
@@ -146,10 +145,6 @@ void TCPSocketServer::cleanup() {
     delete message_manager;
   }
 
-  if (command_manager) {
-    delete command_manager;
-  }
-
   close(serv_fd);
   db::close_database();
   if (ssl_ctx) {
@@ -167,8 +162,8 @@ void TCPSocketServer::handle_connection(Connection *conn) {
     user_msg.ParseFromString(str_buffer);
 
     if (Command::is_command(user_msg.content())) {
-      Command cmd(user_msg.content());
-      bool close_conn = command_manager->parse_command(conn, cmd);
+      Command cmd(user_msg.content(), message_manager, connections, channels);
+      bool close_conn = cmd.parse_command(conn);
       if (close_conn) {
         break;
       }

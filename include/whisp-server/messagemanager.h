@@ -11,7 +11,7 @@ public:
   void broadcast(const google::protobuf::Message &msg,
                  std::string channel_name);
   void send_message(const google::protobuf::Message &msg, Connection conn);
-  void send_and_create(server::Message::MessageType type, std::string content,
+  void create_and_send(server::Message::MessageType type, std::string content,
                        Connection *conn);
   server::Message create_message(server::Message::MessageType type,
                                  std::string content);

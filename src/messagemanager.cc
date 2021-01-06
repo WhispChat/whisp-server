@@ -13,7 +13,7 @@ void MessageManager::send_message(const google::protobuf::Message &msg,
   SSL_write(conn.ssl, msg_str.data(), msg_str.size());
 }
 
-void MessageManager::send_and_create(server::Message::MessageType type,
+void MessageManager::create_and_send(server::Message::MessageType type,
                                      std::string content, Connection *conn) {
   send_message(create_message(type, content), *conn);
 }

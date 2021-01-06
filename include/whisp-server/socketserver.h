@@ -2,8 +2,6 @@
 
 #include "whisp-protobuf/cpp/client.pb.h"
 #include "whisp-protobuf/cpp/server.pb.h"
-#include "whisp-server/command.h"
-#include "whisp-server/commandmanager.h"
 #include "whisp-server/connection.h"
 #include "whisp-server/messagemanager.h"
 
@@ -38,8 +36,6 @@ private:
   struct sockaddr_in serv_addr;
 
   MessageManager *message_manager;
-  CommandManager *command_manager;
-
   std::unordered_set<Connection *, ConnectionHash> connections;
   std::map<std::string, Channel *> channels;
 };
