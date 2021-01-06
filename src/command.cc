@@ -38,19 +38,21 @@ void Command::initialize_commands() {
   commands.push_back(
       std::make_tuple("help", "- Show this message",
                       std::bind(&Command::help_command, this, _1)));
-  commands.push_back(std::make_tuple(
-      "login", "username password - Login as user `username` with "
-               "password `password`",
-      std::bind(&Command::login_command, this, _1)));
+  commands.push_back(
+      std::make_tuple("login",
+                      "username password - Login as user `username` with "
+                      "password `password`",
+                      std::bind(&Command::login_command, this, _1)));
   commands.push_back(std::make_tuple(
       "register", "username email password - Register an account",
       std::bind(&Command::register_command, this, _1)));
   commands.push_back(
       std::make_tuple("quit", "- Close connection to server", nullptr));
-  commands.push_back(std::make_tuple(
-      "set", "var value - Set variable `var` to `value`. Available "
-             "values: username",
-      std::bind(&Command::set_command, this, _1)));
+  commands.push_back(
+      std::make_tuple("set",
+                      "var value - Set variable `var` to `value`. Available "
+                      "values: username",
+                      std::bind(&Command::set_command, this, _1)));
   commands.push_back(
       std::make_tuple("users", "- Show all users connected to current channel",
                       std::bind(&Command::users_command, this, _1)));
@@ -58,15 +60,17 @@ void Command::initialize_commands() {
       std::make_tuple("channels", "- Show all available channels",
                       std::bind(&Command::channels_command, this, _1)));
   commands.push_back(std::make_tuple(
-      "create", "res ...args - Create resource `res` with args. Available "
-                "resources: channel",
-      std::bind(&Command::create_channel_command, this, _1)));
+      "create",
+      "res ...args - Create resource `res` with args. Available "
+      "resources: channel",
+      std::bind(&Command::create_command, this, _1)));
   commands.push_back(
       std::make_tuple("join", "chan - Join channel `chan`",
                       std::bind(&Command::join_channel_command, this, _1)));
   commands.push_back(std::make_tuple(
-      "msg", "username ...message - Send private message `message` to user "
-             "`username`",
+      "msg",
+      "username ...message - Send private message `message` to user "
+      "`username`",
       std::bind(&Command::private_message_command, this, _1)));
 }
 
@@ -98,8 +102,8 @@ bool Command::parse_command(Connection *conn) {
 }
 
 void Command::help_command(Connection *conn) {
-  message_manager->create_and_send(server::Message::INFO, "Available commands:",
-                                   conn);
+  message_manager->create_and_send(server::Message::INFO,
+                                   "Available commands:", conn);
   for (std::tuple<std::string, std::string, std::function<void(Connection *)>>
            cmd : commands) {
     std::string name = std::get<0>(cmd);
@@ -268,74 +272,85 @@ void Command::channels_command(Connection *conn) {
                                    conn);
 }
 
-void Command::create_channel_command(Connection *conn) {
-  // Return an error if the first parameter isn't 'channel'
-  if (args.size() >= 0 && args.at(0) != "channel") {
-    std::string error_msg = "Unknown command";
+void Command::create_command(Connection *conn) {
+  if (args.size() < 2) {
+    std::string error_msg = "Incorrect amount of arguments for create - "
+                            "expected at least 2 (res, *args).";
     message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
     return;
   }
 
-  if (!conn->user->is_registered()) {
-    std::string error_msg = "You are not allowed to create channels. "
-                            "Please register or login and try again.";
-    message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
-    return;
-  }
+  std::string resource = args.at(0);
+  if (resource == "channel") {
+    if (!conn->user->is_registered()) {
+      std::string error_msg = "You are not allowed to create channels. "
+                              "Please register or login and try again.";
+      message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
+      return;
+    }
 
-  int max_users;
-  if (args.size() == 2) {
-    max_users = 8;
-  } else if (args.size() == 3) {
-    try {
-      max_users = std::stoi(args.at(2));
-    } catch (const std::exception &ex) {
+    int max_users;
+    if (args.size() == 2) {
+      max_users = 8;
+    } else if (args.size() == 3) {
+      try {
+        max_users = std::stoi(args.at(2));
+      } catch (const std::exception &ex) {
+        std::string error_msg =
+            "Incorrect type of arguments for create channel - "
+            "expected at least 1 (channel name, max users [numbers only, "
+            "default: 8]).";
+        message_manager->create_and_send(server::Message::ERROR, error_msg,
+                                         conn);
+        return;
+      }
+    } else {
       std::string error_msg =
-          "Incorrect type of arguments for create channel - "
+          "Incorrect amount of arguments for create channel - "
           "expected at least 1 (channel name, max users [numbers only, "
           "default: 8]).";
       message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
       return;
     }
+
+    // Make channel name case insensitive
+    std::string channel_name = args.at(1);
+    std::transform(channel_name.begin(), channel_name.end(),
+                   channel_name.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    // Check if channel name is in use
+    Channel *duplicate_channel = db::channel::get(channel_name);
+
+    if (duplicate_channel) {
+      // Channel name most likely already in use, inform user
+      std::string error_msg =
+          "Channel name \"" + channel_name +
+          "\" is already in use. Please choose another name.";
+      message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
+    } else {
+      // Channel name is not in use, create new channel
+      Channel *new_channel =
+          db::channel::add(channel_name, conn->user->user_id, max_users);
+      if (new_channel) {
+        std::string success_message =
+            "Channel \"" + channel_name + "\" succesfully created.";
+
+        LOG_DEBUG << success_message << '\n';
+        message_manager->create_and_send(server::Message::INFO, success_message,
+                                         conn);
+      } else {
+        // SQLite error, inform user
+        std::string error_msg = "Creating channel failed, please "
+                                "check with server administrator(s).";
+        message_manager->create_and_send(server::Message::ERROR, error_msg,
+                                         conn);
+      }
+    }
   } else {
-    std::string error_msg =
-        "Incorrect amount of arguments for create channel - "
-        "expected at least 1 (channel name, max users [numbers only, "
-        "default: 8]).";
+    std::string error_msg = "Unknown resource " + resource;
     message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
     return;
-  }
-
-  // Make channel name case insensitive
-  std::string channel_name = args.at(1);
-  std::transform(channel_name.begin(), channel_name.end(), channel_name.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-
-  // Check if channel name is in use
-  Channel *duplicate_channel = db::channel::get(channel_name);
-
-  if (duplicate_channel) {
-    // Channel name most likely already in use, inform user
-    std::string error_msg = "Channel name \"" + channel_name +
-                            "\" is already in use. Please choose another name.";
-    message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
-  } else {
-    // Channel name is not in use, create new channel
-    Channel *new_channel =
-        db::channel::add(channel_name, conn->user->user_id, max_users);
-    if (new_channel) {
-      std::string success_message =
-          "Channel \"" + channel_name + "\" succesfully created.";
-
-      LOG_DEBUG << success_message << '\n';
-      message_manager->create_and_send(server::Message::INFO, success_message,
-                                       conn);
-    } else {
-      // SQLite error, inform user
-      std::string error_msg = "Creating channel failed, please "
-                              "check with server administrator(s).";
-      message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
-    }
   }
 }
 

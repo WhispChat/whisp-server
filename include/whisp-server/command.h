@@ -28,7 +28,7 @@ private:
   void set_command(Connection *conn);
   void users_command(Connection *conn);
   void channels_command(Connection *conn);
-  void create_channel_command(Connection *conn);
+  void create_command(Connection *conn);
   void private_message_command(Connection *conn);
 
   std::string message;
