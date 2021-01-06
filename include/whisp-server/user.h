@@ -9,6 +9,8 @@ public:
   std::string username;
 
   virtual void set_message_data(client::Message &user_msg) = 0;
+  virtual void set_message_data(user::PrivateMessageIn &private_msg) = 0;
+  virtual void set_message_data(user::PrivateMessageOut &private_msg) = 0;
   virtual std::string display_name() = 0;
   virtual bool is_registered() = 0;
 
@@ -23,6 +25,8 @@ public:
                  std::string new_email, std::string new_password_hash,
                  std::string new_password_salt);
   void set_message_data(client::Message &user_msg) override;
+  void set_message_data(user::PrivateMessageIn &private_msg) override;
+  void set_message_data(user::PrivateMessageOut &private_msg) override;
   std::string display_name() override;
   bool is_registered() override;
   bool compare_hash(std::string password);
@@ -38,6 +42,8 @@ class GuestUser : public User {
 public:
   GuestUser(std::string new_username);
   void set_message_data(client::Message &user_msg) override;
+  void set_message_data(user::PrivateMessageIn &private_msg) override;
+  void set_message_data(user::PrivateMessageOut &private_msg) override;
   std::string display_name() override;
   bool is_registered() override;
 };

@@ -25,7 +25,7 @@ public:
   }
 
   User *user;
-  Channel *channel;
+  Channel *channel = nullptr;
 
   SSL *ssl;
   struct sockaddr_in addr;

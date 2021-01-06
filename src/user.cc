@@ -19,6 +19,20 @@ void RegisteredUser::set_message_data(client::Message &user_msg) {
   user_msg.set_allocated_registered_user(ru);
 }
 
+void RegisteredUser::set_message_data(user::PrivateMessageIn &private_msg) {
+  user::RegisteredUser *ru = new user::RegisteredUser();
+  ru->set_username(username);
+  ru->set_email(email);
+  private_msg.set_allocated_registered_user(ru);
+}
+
+void RegisteredUser::set_message_data(user::PrivateMessageOut &private_msg) {
+  user::RegisteredUser *ru = new user::RegisteredUser();
+  ru->set_username(username);
+  ru->set_email(email);
+  private_msg.set_allocated_registered_user(ru);
+}
+
 std::string RegisteredUser::display_name() { return username; }
 bool RegisteredUser::is_registered() { return true; }
 
@@ -36,6 +50,18 @@ void GuestUser::set_message_data(client::Message &user_msg) {
   user::GuestUser *gu = new user::GuestUser();
   gu->set_username(username);
   user_msg.set_allocated_guest_user(gu);
+}
+
+void GuestUser::set_message_data(user::PrivateMessageIn &private_msg) {
+  user::GuestUser *gu = new user::GuestUser();
+  gu->set_username(username);
+  private_msg.set_allocated_guest_user(gu);
+}
+
+void GuestUser::set_message_data(user::PrivateMessageOut &private_msg) {
+  user::GuestUser *gu = new user::GuestUser();
+  gu->set_username(username);
+  private_msg.set_allocated_guest_user(gu);
 }
 
 std::string GuestUser::display_name() { return username + " (guest)"; }
