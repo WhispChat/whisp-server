@@ -360,7 +360,7 @@ void Command::join_channel_command(Connection *conn) {
   target_channel->add_user(conn->user->display_name());
   conn->set_channel(target_channel);
 
-  message_manager->welcome_message(conn->user, conn);
+  message_manager->send_welcome_message(conn->user, conn);
 
   // Overwrite the channel object to save any changes made
   channels.insert(std::make_pair(target_channel->name, target_channel));

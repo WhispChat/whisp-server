@@ -17,7 +17,7 @@ public:
                                  std::string content);
 
   std::string get_supported_cipher_list(SSL_CTX *ssl_ctx);
-  void welcome_message(User *user, Connection *conn);
+  void send_welcome_message(User *user, Connection *conn);
   std::string get_users_list();
 
 private:

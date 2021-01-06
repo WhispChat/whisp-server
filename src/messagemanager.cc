@@ -50,15 +50,15 @@ std::string MessageManager::get_supported_cipher_list(SSL_CTX *ssl_ctx) {
   return cipher_list.substr(0, cipher_list.size() - 2);
 }
 
-void MessageManager::welcome_message(User *user, Connection *conn) {
+void MessageManager::send_welcome_message(User *user, Connection *conn) {
   // Inform connection about successfully joining the target channel
   std::string welcome_message = "Welcome to channel " + conn->channel->name +
                                 ", " + conn->user->username + "!";
-  send_message(create_message(server::Message::INFO, welcome_message), *conn);
+  create_and_send(server::Message::INFO, welcome_message, conn);
   std::string user_list_message;
   user_list_message =
       "Users in this channel: " + conn->channel->get_users_list() + ".";
-  send_message(create_message(server::Message::INFO, user_list_message), *conn);
+  create_and_send(server::Message::INFO, user_list_message, conn);
 
   // Inform all connections in the target channel about the new connection
   std::string user_joined_message =
