@@ -301,8 +301,7 @@ void Command::create_channel_command(Connection *conn) {
     std::string error_msg =
         "Incorrect amount of arguments for create channel - "
         "expected at least 1 (channel name, max users [numbers only, "
-        "default: "
-        "8]).";
+        "default: 8]).";
     message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
     return;
   }
@@ -424,7 +423,7 @@ void Command::private_message_command(Connection *conn) {
     return;
   }
 
-  std::string receiver_username = args.at(0);
+  std::string recipient_username = args.at(0);
   // All other args are part of message, join by space
   std::string message =
       std::accumulate(std::begin(args) + 1, std::end(args), std::string(),
@@ -433,14 +432,15 @@ void Command::private_message_command(Connection *conn) {
                       });
 
   for (auto rec_conn : connections) {
-    if (rec_conn->user->username == receiver_username) {
-      // todo: protobuf struct
+    if (rec_conn->user->username == recipient_username) {
+      // send new incoming private message to recipient
       user::PrivateMessageIn private_msg_in;
       private_msg_in.set_content(message);
       conn->user->set_message_data(private_msg_in);
 
       message_manager->send_message(private_msg_in, *rec_conn);
 
+      // send new outgoing private message to sender
       user::PrivateMessageOut private_msg_out;
       private_msg_out.set_content(message);
       conn->user->set_message_data(private_msg_out);
@@ -450,6 +450,6 @@ void Command::private_message_command(Connection *conn) {
     }
   }
 
-  std::string error_msg = "No user " + receiver_username + " online.";
+  std::string error_msg = "No user " + recipient_username + " online.";
   message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
 }
