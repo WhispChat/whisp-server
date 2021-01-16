@@ -19,6 +19,10 @@ const std::regex
     email_regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,4}$",
                 std::regex_constants::icase);
 
+// Regular expression for strong passwords
+const std::regex password_regex("^(?=.*[0-9])(?=.*[a-z]).{8,}$",
+                                std::regex_constants::icase);
+
 Command::Command(std::string message, MessageManager *_message_manager,
                  std::unordered_set<Connection *, ConnectionHash> &_connections,
                  std::map<std::string, Channel *> &_channels)
@@ -188,11 +192,9 @@ void Command::register_command(Connection *conn) {
     return;
   }
 
-  // TODO: More robust password validation, such as minimum amount of
-  // letters, numbers, symbols...
-  if (password.length() < 8) {
+  if (!std::regex_match(password, password_regex)) {
     std::string error_msg =
-        "Passwords should be minimally eight characters long";
+        "Passwords should be minimally eight charachters long and contain at least one (Latin) letter and number";
     message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
     return;
   }
