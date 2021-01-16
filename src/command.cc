@@ -377,6 +377,7 @@ void Command::join_channel_command(Connection *conn) {
                                 "\" is full. Please try again later.";
         message_manager->create_and_send(server::Message::ERROR, error_msg,
                                          conn);
+        return;
       }
     }
   } else {
@@ -387,10 +388,10 @@ void Command::join_channel_command(Connection *conn) {
   }
 
   if (conn->channel) {
-    Channel current_channel = *channels.at(conn->channel->name);
+    Channel *current_channel = channels.at(conn->channel->name);
 
     // Return an error if the user is already in the target channel
-    if (target_channel->name.compare(current_channel.name) == 0) {
+    if (target_channel->name.compare(current_channel->name) == 0) {
       std::string error_msg =
           "You're already in channel \"" + target_channel->name + "\".";
       message_manager->create_and_send(server::Message::ERROR, error_msg, conn);
@@ -398,16 +399,16 @@ void Command::join_channel_command(Connection *conn) {
     }
 
     // Remove the connection from the current channel
-    current_channel.remove_user(conn->user->display_name());
+    current_channel->remove_user(conn->user->display_name());
 
     // Check if the channel is now empty, if so: remove channel from
     // list
-    if (current_channel.get_connection_amount() == 0) {
-      channels.erase(current_channel.name);
+    if (current_channel->get_connection_amount() == 0) {
+      channels.erase(current_channel->name);
     } else {
       // Overwrite the channel object to save any changes made
-      channels.extract(current_channel.name);
-      channels.insert(std::make_pair(current_channel.name, &current_channel));
+      channels.extract(current_channel->name);
+      channels.insert(std::make_pair(current_channel->name, current_channel));
 
       // Inform all connections in the current channel about the
       // connection leaving
@@ -415,7 +416,7 @@ void Command::join_channel_command(Connection *conn) {
           conn->user->display_name() + " has left the channel.";
       message_manager->broadcast(message_manager->create_message(
                                      server::Message::INFO, user_left_message),
-                                 current_channel.name);
+                                 current_channel->name);
     }
   }
 
