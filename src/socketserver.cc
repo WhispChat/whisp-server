@@ -94,9 +94,7 @@ void TCPSocketServer::serve() {
       continue;
     }
 
-    // Currently, new connections will default to guest users - an
-    // authentication flow for registered users should be added alongside GUI
-    // TODO: Better user id assignment
+    // New connections will default to guest users
     GuestUser *user =
         (GuestUser *)(new UserBuilder())
             ->set_username("user" + std::to_string(connections.size()))
